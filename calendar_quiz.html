@@ -17,42 +17,64 @@ body{background:#fafff5;font-family:'Nunito','Hiragino Maru Gothic Pro','BIZ UDG
 <script>
 var MONTHS_JA=['いちがつ','にがつ','さんがつ','しがつ','ごがつ','ろくがつ','しちがつ','はちがつ','くがつ','じゅうがつ','じゅういちがつ','じゅうにがつ'];
 var DAYS_JA=['ついたち','ふつか','みっか','よっか','いつか','むいか','なのか','ようか','ここのか','とおか','じゅういちにち','じゅうににち','じゅうさんにち','じゅうよっか','じゅうごにち','じゅうろくにち','じゅうしちにち','じゅうはちにち','じゅうくにち','はつか','にじゅういちにち','にじゅうににち','にじゅうさんにち','にじゅうよっか','にじゅうごにち','にじゅうろくにち','にじゅうしちにち','にじゅうはちにち','にじゅうくにち','さんじゅうにち','さんじゅういちにち'];
-
-// 特殊な読み方をする日にち（多めに出す）
-var SPECIAL_DAYS = [1,2,3,4,5,6,7,8,9,10,14,17,19,20,24,27,29];
-// 普通の読み方（たまに出す）
-var NORMAL_DAYS  = [11,12,13,15,16,18,21,22,23,25,26,28,30,31];
-
 var WEEKDAYS_JA=['にちようび','げつようび','かようび','すいようび','もくようび','きんようび','どようび'];
 var WK_KANJI=['日','月','火','水','木','金','土'];
-var WK_FURI=['にち','げつ','か','すい','もく','きん','ど'];
+var WK_EN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+var SPECIAL_DAYS=[1,2,3,4,5,6,7,8,9,10,14,17,19,20,24,27,29];
+var NORMAL_DAYS=[11,12,13,15,16,18,21,22,23,25,26,28,30,31];
 
 var YG={
   primary:'#7CB342',primaryLight:'#F1F8E9',primaryBorder:'#AED581',
-  yellow:'#F9A825',yellowLight:'#FFFDE7',yellowBorder:'#FFE082',yellowDark:'#F57F17',
+  yellow:'#F9A825',yellowLight:'#FFFDE7',yellowBorder:'#FFE082',
   text:'#33691E',sub:'#689F38',
   correct:{bg:'#F1F8E9',border:'#AED581',text:'#33691E'},
   wrong:{bg:'#FFF3E0',border:'#FFCC80',text:'#BF360C'},
   hint:{bg:'#FFFDE7',border:'#FFE082',text:'#F57F17'},
 };
 
-var lang='ja',furigana=true;
+var lang='ja';
 var sel={month:true,day:true,weekday:true};
 var totalQ=10,qs=[],cur=0,score=0,answered=false;
 
 var T={
-  ja:{title:'なんがつ・なんにち・なんようび？',selectLabel:'れんしゅうするもんだいをえらぼう！',month:'がつ（月）',day:'にち（日）',weekday:'ようび（曜日）',countLabel:'もんだいのかず',start:'スタート！',back:'← もどる',check:'こたえる',hint:'こたえをみる',next:'つぎへ ▶',placeholder:'ひらがなでかいてね',mondai:'もんだい',correct:'せいかい！',wrong:'ざんねん…こたえは',hintLabel:'こたえ：',retry:'もういちど！',backToSetup:'せってい にもどる',perfect:'かんぺき！すごい！',good:'よくできました！',tryAgain:'もういちどがんばろう！',promptMonth:'なんがつですか？',promptDay:'なんにちですか？',promptWeekday:'なんようびですか？',typeMonth:'がつ',typeDay:'にち',typeWeekday:'ようび',typeFull:'がつ・にち・ようび',furiganaOn:'ふりがな：あり',furiganaOff:'ふりがな：なし'},
-  en:{title:'Month / Date / Day Quiz',selectLabel:'Choose what to practice!',month:'Month',day:'Date',weekday:'Day of week',countLabel:'Number of questions',start:'Start!',back:'← Back',check:'Answer',hint:'Show answer',next:'Next ▶',placeholder:'Type in hiragana (e.g. しちがつ)',mondai:'Q',correct:'Correct!',wrong:'Wrong! The answer is',hintLabel:'Answer: ',retry:'Try again!',backToSetup:'Back to settings',perfect:'Perfect!',good:'Well done!',tryAgain:'Try again!',promptMonth:'What month? (hiragana)',promptDay:'What date? (hiragana)',promptWeekday:'What day of the week? (hiragana)',typeMonth:'Month',typeDay:'Date',typeWeekday:'Day',typeFull:'Month/Date/Day',furiganaOn:'Furigana: ON',furiganaOff:'Furigana: OFF'}
+  ja:{
+    title:'なんがつ・なんにち・なんようび？',
+    selectLabel:'れんしゅうするもんだいをえらぼう！',
+    month:'がつ（月）',day:'にち（日）',weekday:'ようび（曜日）',
+    countLabel:'もんだいのかず',start:'スタート！',back:'← もどる',
+    check:'こたえる',hint:'こたえをみる',next:'つぎへ ▶',
+    placeholder:'ひらがなでかいてね',
+    mondai:'もんだい',correct:'せいかい！',wrong:'ざんねん…こたえは',
+    hintLabel:'こたえ：',retry:'もういちど！',backToSetup:'せってい にもどる',
+    perfect:'かんぺき！すごい！',good:'よくできました！',tryAgain:'もういちどがんばろう！',
+    promptMonth:'なんがつですか？',promptDay:'なんにちですか？',promptWeekday:'なんようびですか？',
+    promptFull:'それぞれ入力してね',
+    typeMonth:'がつ',typeDay:'にち',typeWeekday:'ようび',typeFull:'がつ・にち・ようび',
+    wkLabel:'ようび',
+    inputLabelM:'がつ',inputLabelD:'にち',inputLabelW:'ようび'
+  },
+  en:{
+    title:'Month / Date / Day Quiz',
+    selectLabel:'Choose what to practice!',
+    month:'Month',day:'Date',weekday:'Day of week',
+    countLabel:'Number of questions',start:'Start!',back:'← Back',
+    check:'Answer',hint:'Show answer',next:'Next ▶',
+    placeholder:'Type in hiragana',
+    mondai:'Q',correct:'Correct!',wrong:'Wrong! The answer is',
+    hintLabel:'Answer: ',retry:'Try again!',backToSetup:'Back to settings',
+    perfect:'Perfect!',good:'Well done!',tryAgain:'Try again!',
+    promptMonth:'What month? (hiragana)',promptDay:'What date? (hiragana)',promptWeekday:'What day? (hiragana)',
+    promptFull:'Fill in each box in hiragana',
+    typeMonth:'Month',typeDay:'Date',typeWeekday:'Day',typeFull:'Month/Date/Day',
+    wkLabel:'day',
+    inputLabelM:'Month',inputLabelD:'Date',inputLabelW:'Day'
+  }
 };
 
 function t(k){return T[lang][k]||'';}
 function ff(){return "'Nunito','Hiragino Maru Gothic Pro','BIZ UDGothic',sans-serif";}
 function ri(a,b){return Math.floor(Math.random()*(b-a+1))+a;}
-function pickDay(){
-  // 約80%の確率で特殊な日、20%で普通の日
-  var pool = Math.random()<0.8 ? SPECIAL_DAYS : NORMAL_DAYS;
-  return pool[Math.floor(Math.random()*pool.length)];
-}
+function pickDay(){var pool=Math.random()<0.8?SPECIAL_DAYS:NORMAL_DAYS;return pool[Math.floor(Math.random()*pool.length)];}
 function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var tmp=b[i];b[i]=b[j];b[j]=tmp;}return b;}
 function norm(s){return s.trim().replace(/\s+/g,' ').toLowerCase();}
 var app=document.getElementById('app');
@@ -64,15 +86,10 @@ function el(tag,css,txt){
   return e;
 }
 
-function makeCell(furiText, bigText, bigSize, bigColor, labelText, labelColor){
+// カードセル
+function makeCell(bigText,bigSize,bigColor,labelText,labelColor){
   var cell=document.createElement('div');
   cell.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 14px;min-width:72px;';
-  if(furigana&&furiText){
-    var furi=document.createElement('div');
-    furi.style.cssText='font-size:13px;color:'+bigColor+';margin-bottom:3px;font-family:'+ff()+';line-height:1;';
-    furi.textContent=furiText;
-    cell.appendChild(furi);
-  }
   var big=document.createElement('div');
   big.style.cssText='font-size:'+bigSize+';font-weight:700;color:'+bigColor+';line-height:1;font-family:'+ff()+';';
   big.textContent=bigText;
@@ -85,8 +102,7 @@ function makeCell(furiText, bigText, bigSize, bigColor, labelText, labelColor){
   }
   return cell;
 }
-
-function makeDividerV(){
+function makeDivV(){
   var d=document.createElement('div');
   d.style.cssText='width:1px;background:'+YG.primaryBorder+';align-self:stretch;margin:8px 0;opacity:0.6;';
   return d;
@@ -95,24 +111,30 @@ function makeDividerV(){
 function calCard(q){
   var sunC='#E53935',satC='#1565C0',normC=YG.text;
   var wrap=document.createElement('div');
-  wrap.style.cssText='background:'+YG.primaryLight+';border:3px solid '+YG.primaryBorder+';border-radius:20px;padding:14px 8px;display:inline-flex;align-items:center;justify-content:center;gap:0;';
+  wrap.style.cssText='background:'+YG.primaryLight+';border:3px solid '+YG.primaryBorder+';border-radius:20px;padding:14px 8px;display:inline-flex;align-items:center;justify-content:center;';
+
+  function wkColor(wi){return wi===0?sunC:wi===6?satC:normC;}
+  // 英語モードは略称、日本語は漢字
+  function wkDisplay(wi){return lang==='en'?WK_EN[wi]:WK_KANJI[wi];}
+  function wkLabel(wi){return lang==='en'?'':t('wkLabel');}
 
   if(q.type==='month'){
-    wrap.appendChild(makeCell(null,q.numVal,'52px',YG.primary,'月'));
+    wrap.appendChild(makeCell(q.numVal,'52px',YG.primary,'月'));
   } else if(q.type==='day'){
-    wrap.appendChild(makeCell(null,q.numVal,'52px',YG.text,'日'));
+    wrap.appendChild(makeCell(q.numVal,'52px',YG.text,'日'));
   } else if(q.type==='weekday'){
-    var wi=q.wIdx;
-    var wc=wi===0?sunC:wi===6?satC:normC;
-    wrap.appendChild(makeCell(furigana?WK_FURI[wi]:null,WK_KANJI[wi],'52px',wc,'ようび',wc));
+    var wi=q.wIdx;var wc=wkColor(wi);
+    var sz=lang==='en'?'36px':'52px';
+    wrap.appendChild(makeCell(wkDisplay(wi),sz,wc,wkLabel(wi),wc));
   } else {
     var first=true;
-    if(q.mVal!==null){if(!first)wrap.appendChild(makeDividerV());wrap.appendChild(makeCell(null,q.mVal,'44px',YG.primary,'月'));first=false;}
-    if(q.dVal!==null){if(!first)wrap.appendChild(makeDividerV());wrap.appendChild(makeCell(null,q.dVal,'44px',YG.text,'日'));first=false;}
+    if(q.mVal!==null){if(!first)wrap.appendChild(makeDivV());wrap.appendChild(makeCell(q.mVal,'44px',YG.primary,'月'));first=false;}
+    if(q.dVal!==null){if(!first)wrap.appendChild(makeDivV());wrap.appendChild(makeCell(q.dVal,'44px',YG.text,'日'));first=false;}
     if(q.wIdx!==null){
-      var wi2=q.wIdx;var wc2=wi2===0?sunC:wi2===6?satC:normC;
-      if(!first)wrap.appendChild(makeDividerV());
-      wrap.appendChild(makeCell(furigana?WK_FURI[wi2]:null,WK_KANJI[wi2],'44px',wc2,'ようび',wc2));
+      var wi2=q.wIdx;var wc2=wkColor(wi2);
+      var sz2=lang==='en'?'30px':'44px';
+      if(!first)wrap.appendChild(makeDivV());
+      wrap.appendChild(makeCell(wkDisplay(wi2),sz2,wc2,wkLabel(wi2),wc2));
       first=false;
     }
   }
@@ -123,7 +145,8 @@ function showSetup(){
   app.innerHTML='';
   app.appendChild(el('div','text-align:center;font-size:20px;font-weight:700;color:'+YG.text+';margin-bottom:16px;line-height:1.4;',t('title')));
 
-  var bar=el('div','display:flex;justify-content:center;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap;');
+  // 言語タブのみ（ふりがなボタンなし）
+  var bar=el('div','display:flex;justify-content:center;align-items:center;gap:10px;margin-bottom:20px;');
   var tabs=el('div','display:flex;border:2px solid '+YG.primaryBorder+';border-radius:50px;overflow:hidden;');
   ['ja','en'].forEach(function(l){
     var b=document.createElement('button');
@@ -134,12 +157,6 @@ function showSetup(){
     tabs.appendChild(b);
   });
   bar.appendChild(tabs);
-
-  var fb2=document.createElement('button');
-  fb2.textContent=furigana?t('furiganaOn'):t('furiganaOff');
-  fb2.style.cssText='padding:8px 16px;font-size:13px;font-weight:700;font-family:'+ff()+';border-radius:50px;cursor:pointer;border:2px solid '+(furigana?YG.yellowBorder:'#ddd')+';background:'+(furigana?YG.yellowLight:'#f5f5f5')+';color:'+(furigana?YG.yellowDark:'#999')+';';
-  fb2.addEventListener('click',function(){furigana=!furigana;showSetup();});
-  bar.appendChild(fb2);
   app.appendChild(bar);
 
   app.appendChild(el('div','text-align:center;font-size:14px;font-weight:700;color:'+YG.sub+';margin-bottom:12px;',t('selectLabel')));
@@ -179,17 +196,21 @@ function showSetup(){
 }
 
 function genQ(type){
-  if(type==='month'){var m=ri(1,12);return{type:'month',wIdx:null,numVal:m,answer:MONTHS_JA[m-1],prompt:lang==='ja'?'なんがつですか？':'What month? (hiragana)'};}
-  if(type==='day'){
-    var d=pickDay();
-    return{type:'day',wIdx:null,numVal:d,answer:DAYS_JA[d-1],prompt:lang==='ja'?'なんにちですか？':'What date? (hiragana)'};
-  }
-  if(type==='weekday'){var w=ri(0,6);return{type:'weekday',wIdx:w,numVal:null,answer:WEEKDAYS_JA[w],prompt:lang==='ja'?'なんようびですか？':'What day of the week? (hiragana)'};}
-  var m2=ri(1,12),d2=pickDay(),w2=ri(0,6),ans=[],pJA=[],pEN=[];
-  if(sel.month){ans.push(MONTHS_JA[m2-1]);pJA.push('なんがつ');pEN.push('the month');}
-  if(sel.day){ans.push(DAYS_JA[d2-1]);pJA.push('なんにち');pEN.push('the date');}
-  if(sel.weekday){ans.push(WEEKDAYS_JA[w2]);pJA.push('なんようび');pEN.push('the day of the week');}
-  return{type:'full',mVal:sel.month?m2:null,dVal:sel.day?d2:null,wIdx:sel.weekday?w2:null,answer:ans.join(' '),prompt:lang==='ja'?(pJA.join(' ')+' ですか？'):('Write '+pEN.join(', ')+' in hiragana.')};
+  if(type==='month'){var m=ri(1,12);return{type:'month',wIdx:null,numVal:m,answers:[MONTHS_JA[m-1]],prompt:t('promptMonth')};}
+  if(type==='day'){var d=pickDay();return{type:'day',wIdx:null,numVal:d,answers:[DAYS_JA[d-1]],prompt:t('promptDay')};}
+  if(type==='weekday'){var w=ri(0,6);return{type:'weekday',wIdx:w,numVal:null,answers:[WEEKDAYS_JA[w]],prompt:t('promptWeekday')};}
+  // full: answersは各パーツを別々に管理
+  var m2=ri(1,12),d2=pickDay(),w2=ri(0,6);
+  var parts=[];
+  if(sel.month)parts.push({key:'month',answer:MONTHS_JA[m2-1],label:lang==='en'?'Month':'がつ'});
+  if(sel.day)parts.push({key:'day',answer:DAYS_JA[d2-1],label:lang==='en'?'Date':'にち'});
+  if(sel.weekday)parts.push({key:'weekday',answer:WEEKDAYS_JA[w2],label:lang==='en'?'Day':'ようび'});
+  return{
+    type:'full',
+    mVal:sel.month?m2:null,dVal:sel.day?d2:null,wIdx:sel.weekday?w2:null,
+    parts:parts,
+    prompt:t('promptFull')
+  };
 }
 
 function startQuiz(){
@@ -217,7 +238,6 @@ function showQuiz(){
   var pw=el('div','background:#E8F5E9;border-radius:99px;height:8px;margin-bottom:14px;overflow:hidden;');
   var pb=el('div','height:8px;border-radius:99px;background:'+YG.primary+';width:'+Math.round((cur/totalQ)*100)+'%;');
   pw.appendChild(pb);app.appendChild(pw);
-
   app.appendChild(el('div','text-align:center;font-size:13px;color:'+YG.sub+';margin-bottom:12px;font-weight:700;',t('mondai')+' '+(cur+1)+' / '+totalQ));
 
   var card=el('div','background:white;border:3px solid '+YG.primaryBorder+';border-radius:24px;padding:20px;margin-bottom:12px;');
@@ -229,37 +249,106 @@ function showQuiz(){
 
   card.appendChild(el('div','text-align:center;font-size:17px;font-weight:700;color:'+YG.text+';margin-bottom:14px;line-height:1.6;',q.prompt));
 
-  var irow=el('div','display:flex;gap:8px;align-items:center;');
-  var inp=el('input','flex:1;font-size:18px;font-weight:700;padding:10px 16px;border-radius:50px;border:2px solid '+YG.primaryBorder+';background:'+YG.primaryLight+';color:'+YG.text+';outline:none;box-sizing:border-box;');
-  inp.type='text';inp.placeholder=t('placeholder');inp.autocomplete='off';
-  var chk=el('button','padding:10px 20px;border-radius:50px;border:none;background:'+YG.primary+';color:#fff;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;',t('check'));
-  irow.appendChild(inp);irow.appendChild(chk);card.appendChild(irow);
-
   var fb=el('div','margin-top:12px;padding:10px 16px;border-radius:14px;font-size:15px;font-weight:700;display:none;');
-  card.appendChild(fb);
   var nextBtn=el('button','width:100%;padding:12px;font-size:15px;font-weight:700;border:none;border-radius:50px;background:'+YG.yellow+';color:#fff;cursor:pointer;margin-top:12px;display:none;',t('next'));
-  card.appendChild(nextBtn);app.appendChild(card);
 
-  var hintBtn=el('button','display:block;margin:0 auto;padding:8px 20px;font-size:13px;font-weight:700;border:2px solid '+YG.primaryBorder+';border-radius:50px;background:'+YG.primaryLight+';color:'+YG.text+';cursor:pointer;',t('hint'));
-  app.appendChild(hintBtn);
+  var inputs=[];
 
-  function doCheck(){
-    if(answered)return;answered=true;
-    var ua=norm(inp.value),ca=norm(q.answer);fb.style.display='block';
-    if(ua===ca){score++;scoreEl.textContent='⭐ '+score+' / '+totalQ;fb.style.cssText='margin-top:12px;padding:10px 16px;border-radius:14px;font-size:15px;font-weight:700;background:'+YG.correct.bg+';color:'+YG.correct.text+';border:2px solid '+YG.correct.border+';display:block;font-family:'+ff()+';';fb.textContent=t('correct')+'「'+q.answer+'」';}
-    else{fb.style.cssText='margin-top:12px;padding:10px 16px;border-radius:14px;font-size:15px;font-weight:700;background:'+YG.wrong.bg+';color:'+YG.wrong.text+';border:2px solid '+YG.wrong.border+';display:block;font-family:'+ff()+';';fb.textContent=t('wrong')+'「'+q.answer+'」';}
-    nextBtn.style.display='block';hintBtn.style.display='none';
+  if(q.type==='full'){
+    // ミックス：パーツごとに入力欄
+    q.parts.forEach(function(part){
+      var row=el('div','margin-bottom:10px;');
+      var lbl=el('div','font-size:12px;font-weight:700;color:'+YG.sub+';margin-bottom:4px;',part.label);
+      row.appendChild(lbl);
+      var inp=el('input','width:100%;font-size:17px;font-weight:700;padding:10px 14px;border-radius:50px;border:2px solid '+YG.primaryBorder+';background:'+YG.primaryLight+';color:'+YG.text+';outline:none;box-sizing:border-box;');
+      inp.type='text';inp.placeholder=t('placeholder');inp.autocomplete='off';
+      inp.dataset.answer=part.answer;
+      row.appendChild(inp);
+      card.appendChild(row);
+      inputs.push(inp);
+    });
+    var chk=el('button','width:100%;padding:10px;border-radius:50px;border:none;background:'+YG.primary+';color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-top:4px;',t('check'));
+    card.appendChild(chk);
+    card.appendChild(fb);
+    card.appendChild(nextBtn);
+    app.appendChild(card);
+
+    function doCheckFull(){
+      if(answered)return;answered=true;
+      var allOk=true;
+      var correctAns=[];
+      inputs.forEach(function(inp){
+        var ua=norm(inp.value),ca=norm(inp.dataset.answer);
+        if(ua!==ca)allOk=false;
+        correctAns.push(inp.dataset.answer);
+      });
+      fb.style.display='block';
+      if(allOk){
+        score++;scoreEl.textContent='⭐ '+score+' / '+totalQ;
+        fb.style.cssText='margin-top:12px;padding:10px 16px;border-radius:14px;font-size:15px;font-weight:700;background:'+YG.correct.bg+';color:'+YG.correct.text+';border:2px solid '+YG.correct.border+';display:block;font-family:'+ff()+';';
+        fb.textContent=t('correct')+'「'+correctAns.join('  ')+'」';
+      } else {
+        fb.style.cssText='margin-top:12px;padding:10px 16px;border-radius:14px;font-size:15px;font-weight:700;background:'+YG.wrong.bg+';color:'+YG.wrong.text+';border:2px solid '+YG.wrong.border+';display:block;font-family:'+ff()+';';
+        fb.textContent=t('wrong')+'「'+correctAns.join('  ')+'」';
+      }
+      nextBtn.style.display='block';
+    }
+    chk.addEventListener('click',doCheckFull);
+    inputs.forEach(function(inp){
+      inp.addEventListener('keydown',function(e){if(e.key==='Enter')doCheckFull();});
+    });
+    // ヒントボタン
+    var hintBtn=el('button','display:block;margin:0 auto;padding:8px 20px;font-size:13px;font-weight:700;border:2px solid '+YG.primaryBorder+';border-radius:50px;background:'+YG.primaryLight+';color:'+YG.text+';cursor:pointer;',t('hint'));
+    app.appendChild(hintBtn);
+    hintBtn.addEventListener('click',function(){
+      if(answered)return;answered=true;
+      var correctAns=inputs.map(function(inp){return inp.dataset.answer;});
+      fb.style.cssText='margin-top:12px;padding:10px 16px;border-radius:14px;font-size:15px;font-weight:700;background:'+YG.hint.bg+';color:'+YG.hint.text+';border:2px solid '+YG.hint.border+';display:block;font-family:'+ff()+';';
+      fb.textContent=t('hintLabel')+'「'+correctAns.join('  ')+'」';
+      fb.style.display='block';
+      nextBtn.style.display='block';
+      hintBtn.style.display='none';
+    });
+    nextBtn.addEventListener('click',function(){cur++;showQuiz();});
+    if(inputs.length>0)inputs[0].focus();
+
+  } else {
+    // 単体問題
+    var irow=el('div','display:flex;gap:8px;align-items:center;');
+    var inp=el('input','flex:1;font-size:18px;font-weight:700;padding:10px 16px;border-radius:50px;border:2px solid '+YG.primaryBorder+';background:'+YG.primaryLight+';color:'+YG.text+';outline:none;box-sizing:border-box;');
+    inp.type='text';inp.placeholder=t('placeholder');inp.autocomplete='off';
+    var chk=el('button','padding:10px 20px;border-radius:50px;border:none;background:'+YG.primary+';color:#fff;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;',t('check'));
+    irow.appendChild(inp);irow.appendChild(chk);card.appendChild(irow);
+    card.appendChild(fb);card.appendChild(nextBtn);app.appendChild(card);
+    var hintBtn=el('button','display:block;margin:0 auto;padding:8px 20px;font-size:13px;font-weight:700;border:2px solid '+YG.primaryBorder+';border-radius:50px;background:'+YG.primaryLight+';color:'+YG.text+';cursor:pointer;',t('hint'));
+    app.appendChild(hintBtn);
+
+    var answer=q.answers[0];
+    function doCheck(){
+      if(answered)return;answered=true;
+      var ua=norm(inp.value),ca=norm(answer);
+      fb.style.display='block';
+      if(ua===ca){
+        score++;scoreEl.textContent='⭐ '+score+' / '+totalQ;
+        fb.style.cssText='margin-top:12px;padding:10px 16px;border-radius:14px;font-size:15px;font-weight:700;background:'+YG.correct.bg+';color:'+YG.correct.text+';border:2px solid '+YG.correct.border+';display:block;font-family:'+ff()+';';
+        fb.textContent=t('correct')+'「'+answer+'」';
+      } else {
+        fb.style.cssText='margin-top:12px;padding:10px 16px;border-radius:14px;font-size:15px;font-weight:700;background:'+YG.wrong.bg+';color:'+YG.wrong.text+';border:2px solid '+YG.wrong.border+';display:block;font-family:'+ff()+';';
+        fb.textContent=t('wrong')+'「'+answer+'」';
+      }
+      nextBtn.style.display='block';hintBtn.style.display='none';
+    }
+    chk.addEventListener('click',doCheck);
+    inp.addEventListener('keydown',function(e){if(e.key==='Enter')doCheck();});
+    hintBtn.addEventListener('click',function(){
+      if(answered)return;answered=true;
+      fb.style.cssText='margin-top:12px;padding:10px 16px;border-radius:14px;font-size:15px;font-weight:700;background:'+YG.hint.bg+';color:'+YG.hint.text+';border:2px solid '+YG.hint.border+';display:block;font-family:'+ff()+';';
+      fb.textContent=t('hintLabel')+'「'+answer+'」';
+      fb.style.display='block';nextBtn.style.display='block';hintBtn.style.display='none';
+    });
+    nextBtn.addEventListener('click',function(){cur++;showQuiz();});
+    inp.focus();
   }
-  chk.addEventListener('click',doCheck);
-  inp.addEventListener('keydown',function(e){if(e.key==='Enter')doCheck();});
-  hintBtn.addEventListener('click',function(){
-    if(answered)return;answered=true;
-    fb.style.cssText='margin-top:12px;padding:10px 16px;border-radius:14px;font-size:15px;font-weight:700;background:'+YG.hint.bg+';color:'+YG.hint.text+';border:2px solid '+YG.hint.border+';display:block;font-family:'+ff()+';';
-    fb.textContent=t('hintLabel')+'「'+q.answer+'」';
-    nextBtn.style.display='block';hintBtn.style.display='none';
-  });
-  nextBtn.addEventListener('click',function(){cur++;showQuiz();});
-  inp.focus();
 }
 
 function showResult(){
