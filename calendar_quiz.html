@@ -294,8 +294,14 @@ function showQuiz(){
       nextBtn.style.display='block';
     }
     chk.addEventListener('click',doCheckFull);
-    inputs.forEach(function(inp){
-      inp.addEventListener('keydown',function(e){if(e.key==='Enter')doCheckFull();});
+    // Enterでは提出しない（次の入力欄へ移動するだけ）。提出は「こたえる/Answer」ボタンのみ
+    inputs.forEach(function(inp,i){
+      inp.addEventListener('keydown',function(e){
+        if(e.key==='Enter'){
+          e.preventDefault();
+          if(i<inputs.length-1)inputs[i+1].focus();
+        }
+      });
     });
     // ヒントボタン
     var hintBtn=el('button','display:block;margin:0 auto;padding:8px 20px;font-size:13px;font-weight:700;border:2px solid '+YG.primaryBorder+';border-radius:50px;background:'+YG.primaryLight+';color:'+YG.text+';cursor:pointer;',t('hint'));
