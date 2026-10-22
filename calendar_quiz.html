@@ -86,15 +86,8 @@ button{font-family:inherit;cursor:pointer;}
 .pop{animation:pop .35s ease;}
 @keyframes pop{0%{transform:scale(.8);}60%{transform:scale(1.08);}100%{transform:scale(1);}}
 .sec{font-size:13px;font-weight:700;color:#689F38;margin:14px 2px 8px;}
-.pair2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
-.pcol{display:flex;flex-direction:column;gap:8px;}
-.pbtn{min-height:58px;border-radius:14px;border:2px solid #AED581;background:#F1F8E9;color:#33691E;padding:8px 6px;text-align:center;}
-.pbtn.y{background:#FFFDE7;border-color:#FFE082;}
-.pbtn .pt{font-size:15px;font-weight:700;line-height:1.3;word-break:break-word;}
-.pbtn .ps{font-size:11px;color:#689F38;margin-top:2px;}
-.pbtn.sel{border-color:#F9A825;box-shadow:0 0 0 3px #FFE082;}
-.pbtn.done{opacity:.35;pointer-events:none;}
-.pbtn.bad{background:#FFF3E0;border-color:#FFB74D;animation:shake .4s;}
+.mcard.sel{border-color:#F9A825;box-shadow:0 0 0 3px #FFE082;transform:translateY(-3px);}
+.mcard.bad{background:#FFF3E0;border-color:#FFB74D;animation:shake .4s;}
 @keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-5px);}75%{transform:translateX(5px);}}
 </style>
 </head>
@@ -669,13 +662,13 @@ function modeExplore(){
     var ask,askEn;
     if(q.kind==='day'){
       ask='「'+twDisplay(q.w)+'」は どの ひ？ タップしてね！';
-      askEn='Tap the date for “'+q.w.en+'”';
+      askEn='Tap the date for “'+twDisplay(q.w)+'”';
     }else if(q.kind==='week'){
       ask='「'+q.w.ja+'の '+WD_JA[q.wd]+'」は どの ひ？';
-      askEn='Tap “'+q.w.en.replace('this week','this week\'s').replace('last week','last week\'s').replace('next week','next week\'s')+' '+WD_EN_FULL[q.wd]+'”';
+      askEn='Tap the date for “'+q.w.ja+'の '+WD_JA[q.wd]+(S.kanji?'（'+(q.w.kj?q.w.kj:'')+'の'+WD_K[q.wd]+'曜日）':'')+'”';
     }else{
       ask='いま '+(q.m+1)+'月。「'+twDisplay(q.w)+'」は なんがつ？';
-      askEn='It is '+MON_EN[q.m]+' now. What is “'+q.w.en+'”?';
+      askEn='It is '+MON_EN[q.m]+' now. What is “'+twDisplay(q.w)+'”?';
     }
     app.appendChild(h('div',{c:'cardg'},[
       h('div',{c:'small',t:S.lang==='en'?MON_EN[q.m]+' '+q.Y:q.Y+'年 '+(q.m+1)+'月'}),
@@ -833,7 +826,7 @@ function modeMemory(){
   });
   app.appendChild(h('div',{c:'row'},[lv]));
   app.appendChild(h('div',{c:'sub',t:memLevel==='easy'
-    ?L('ぜんぶ みえているよ。ひだりと みぎの おなじ いみを 1つずつ タップして つなごう！','Everything is visible. Tap one on the left and its match on the right!')
+    ?L('カードは ぜんぶ みえているよ。おなじ いみの カードを 2まい タップして ペアにしよう！','All cards are face up. Tap two cards that match!')
     :L('カードは うらがえし。おなじ いみの カードを 2まい みつけよう！','Cards are face down. Find the two cards that match!')}));
   var decks=[['time',L('じかんのことば','Time words')],['month',L('がつ（月）','Months')],['day',L('ひにち（日）','Dates')],['mix',L('ミックス','Mix')]];
   var sizes=[[4,L('すくない','Few')],[6,L('ふつう','Normal')],[8,L('おおい','Many')]];
@@ -850,56 +843,51 @@ function modeMemory(){
   app.appendChild(rowS);
   app.appendChild(h('button',{c:'btn',t:L('スタート！','Start!'),on:{click:function(){(memLevel==='easy'?memEasy:memGame)(memDeck,memSize);}}}));
 }
-/* かんたん：ぜんぶ みえている ペアさがし */
+/* かんたん：ぜんぶ みえている ペアさがし（カードの形はむずかしいと おなじ） */
 function memEasy(deck,n){
   var pairs=shuffle(buildPairs(deck)).slice(0,n);
-  var lefts=shuffle(pairs.map(function(p,i){return {id:i,c:p.a};}));
-  var rights=shuffle(pairs.map(function(p,i){return {id:i,c:p.b};}));
-  var selL=null,selR=null,miss=0,matched=0,lock=false;
+  var cards=[];
+  pairs.forEach(function(p,id){cards.push({id:id,side:'a',c:p.a});cards.push({id:id,side:'b',c:p.b});});
+  cards=shuffle(cards);
+  var first=null,lock=false,misses=0,matched=0;
   screen();
   app.appendChild(topbar('🃏 '+L('ペアさがし（かんたん）','Pair Match (Easy)'),modeMemory));
   var info=h('div',{c:'sub',t:''});
-  function upd(){info.textContent=L('ミス：','Misses: ')+miss+'　　'+L('ペア：','Pairs: ')+matched+' / '+n;}
+  function upd(){info.textContent=L('ミス：','Misses: ')+misses+'　　'+L('ペア：','Pairs: ')+matched+' / '+n;}
   upd();app.appendChild(info);
-  function judge(){
-    var a=selL,b=selR;
-    if(a.id===b.id){
-      a.done=b.done=true;
-      a.el.classList.remove('sel');b.el.classList.remove('sel');
-      a.el.classList.add('done');b.el.classList.add('done');
-      selL=selR=null;matched++;upd();
-      if(matched===n){
-        var st=miss<=1?3:miss<=Math.ceil(n/2)?2:1;
+  var grid=h('div',{c:'mem'});
+  cards.forEach(function(cd){
+    var el=h('button',{c:'mcard open'+(cd.side==='b'?' b':'')},[h('div',{c:'mt',t:cd.c.t}),cd.c.sub?h('div',{c:'ms',t:cd.c.sub}):null]);
+    cd.el=el;
+    el.addEventListener('click',function(){
+      if(lock||cd.done||first===cd)return;
+      if(cd.c.sp)speak(cd.c.sp);
+      el.classList.add('sel');
+      if(!first){first=cd;return;}
+      var a=first,b=cd;first=null;
+      if(a.id===b.id&&a.side!==b.side){
+        a.done=b.done=true;
+        [a,b].forEach(function(x){x.el.classList.remove('sel');x.el.classList.add('done');});
+        matched++;upd();
+        if(matched===n){
+          var st=misses<=1?3:misses<=Math.ceil(n/2)?2:1;
+          MT=setTimeout(function(){
+            result('memory',st,L('ぜんぶ みつけた！','You found them all!'),[L('ミス：','Misses: ')+misses,st===3?L('てんさい！','Genius!'):L('よくできました！','Well done!')],function(){memEasy(deck,n);});
+          },700);
+        }
+      }else{
+        misses++;lock=true;upd();
+        [a,b].forEach(function(x){x.el.classList.add('bad');});
         MT=setTimeout(function(){
-          result('memory',st,L('ぜんぶ つなげた！','All matched!'),[L('ミス：','Misses: ')+miss,st===3?L('てんさい！','Genius!'):L('よくできました！','Well done!')],function(){memEasy(deck,n);});
-        },700);
+          [a,b].forEach(function(x){x.el.classList.remove('bad');x.el.classList.remove('sel');});
+          lock=false;
+        },650);
       }
-    }else{
-      miss++;lock=true;upd();
-      a.el.classList.add('bad');b.el.classList.add('bad');
-      MT=setTimeout(function(){
-        [a,b].forEach(function(x){x.el.classList.remove('bad');x.el.classList.remove('sel');});
-        selL=selR=null;lock=false;
-      },650);
-    }
-  }
-  function mk(item,side){
-    var b=h('button',{c:'pbtn'+(side==='b'?' y':'')},[h('div',{c:'pt',t:item.c.t}),item.c.sub?h('div',{c:'ps',t:item.c.sub}):null]);
-    item.el=b;
-    b.addEventListener('click',function(){
-      if(lock||item.done)return;
-      if(item.c.sp)speak(item.c.sp);
-      if(side==='a'){if(selL)selL.el.classList.remove('sel');selL=item;}
-      else{if(selR)selR.el.classList.remove('sel');selR=item;}
-      b.classList.add('sel');
-      if(selL&&selR)judge();
     });
-    return b;
-  }
-  var colL=h('div',{c:'pcol'}),colR=h('div',{c:'pcol'});
-  lefts.forEach(function(it){colL.appendChild(mk(it,'a'));});
-  rights.forEach(function(it){colR.appendChild(mk(it,'b'));});
-  app.appendChild(h('div',{c:'pair2'},[colL,colR]));
+    grid.appendChild(el);
+  });
+  app.appendChild(grid);
+  app.appendChild(h('div',{c:'small',s:'text-align:center;',t:L('みどり：にほんご　／　きいろ：えいご・すうじ・よみかた','Green: Japanese reading / Yellow: English, number or reading')}));
 }
 /* むずかしい：うらがえしの カード（これまでの ペアさがし） */
 function memGame(deck,n){
@@ -1073,45 +1061,45 @@ function buildScenes(Dt){
   var sc=[];
   sc.push({
     say:L('「ねえ、きょうは なんにち？ ぼく、わすれちゃった」とミルが ききました。「'+today+'だよ」とあなたは こたえました。「じゃあ、あしたは？」',
-          'Mil asked, “What\'s the date today? I forgot.” You said, “It\'s '+MON_EN[m]+' '+Dt.getDate()+'.” “Then, what about tomorrow?”'),
-    ask:L('あしたは なんにち？','What is tomorrow\'s date?'),
+          'Mil asked, “What\'s the date today? I forgot.” You said, “It\'s '+MON_EN[m]+' '+Dt.getDate()+'.” “Then, what about '+twDisplay(TW.day[3])+'?”'),
+    ask:L('あしたは なんにち？','What date is '+twDisplay(TW.day[3])+'?'),
     opts:dateOpts(Dt,1),ans:'あした ＝ '+fullNum(addDays(Dt,1)),sp:fullRead(addDays(Dt,1))
   });
   var wi=(dow+2)%7;
   sc.push({
-    say:L('「あさって、ともだちに あうんだ！ なんようびかな？」','“I\'m meeting a friend the day after tomorrow! What day of the week will that be?”'),
-    ask:L('あさっては なんようび？','What day of the week is the day after tomorrow?'),
+    say:L('「あさって、ともだちに あうんだ！ なんようびかな？」','“I\'m meeting a friend '+twDisplay(TW.day[4])+'! What day of the week will that be?”'),
+    ask:L('あさっては なんようび？','What day of the week is '+twDisplay(TW.day[4])+'?'),
     opts:shuffle([wi].concat(shuffle([0,1,2,3,4,5,6].filter(function(x){return x!==wi;})).slice(0,3))).map(function(x){return {t:WD_JA[x],sub:wdSub(x),ok:x===wi,sp:WD_JA[x]};}),
     ans:'あさって ＝ '+WD_JA[wi],sp:WD_JA[wi]
   });
   sc.push({
-    say:L('「おとといは ごはんを たべすぎたよ…。あれは なんにちだったっけ？」','“I ate too much the day before yesterday… What date was that?”'),
-    ask:L('おとといは なんにち？','What was the date the day before yesterday?'),
+    say:L('「おとといは ごはんを たべすぎたよ…。あれは なんにちだったっけ？」','“I ate too much '+twDisplay(TW.day[0])+'… What date was that?”'),
+    ask:L('おとといは なんにち？','What date is '+twDisplay(TW.day[0])+'?'),
     opts:dateOpts(Dt,-2),ans:'おととい ＝ '+fullNum(addDays(Dt,-2)),sp:fullRead(addDays(Dt,-2))
   });
   var nw=ri(0,6),nwDate=addDays(Dt,-dow+7+nw);
   var nwOff=-dow+7+nw;
   var wrongOffs=shuffle([nwOff-7,nwOff+7,nwOff+1,nwOff-1,nwOff+2].filter(function(o){return o!==nwOff;})).slice(0,3);
   sc.push({
-    say:L('「らいしゅうの '+WD_JA[nw]+'に、おまつりが あるって！」','“I heard there\'s a festival on next week\'s '+WD_EN_FULL[nw]+'!”'),
-    ask:L('らいしゅうの '+WD_JA[nw]+'は なんにち？','What date is next week\'s '+WD_EN_FULL[nw]+'?'),
+    say:L('「らいしゅうの '+WD_JA[nw]+'に、おまつりが あるって！」','“I heard there\'s a festival on らいしゅうの '+WD_JA[nw]+'!”'),
+    ask:L('らいしゅうの '+WD_JA[nw]+'は なんにち？','What date is らいしゅうの '+WD_JA[nw]+'?'),
     opts:shuffle([nwOff].concat(wrongOffs)).map(function(o){var d=addDays(Dt,o);return {t:fullNum(d),sub:fullRead(d),ok:o===nwOff,sp:fullRead(d)};}),
     ans:'らいしゅうの'+WD_JA[nw]+' ＝ '+fullNum(nwDate),sp:fullRead(nwDate)
   });
   sc.push({
-    say:L('「らいげつは ぼくの たんじょうび！ なんがつだろう？」','“Next month is my birthday! Which month is it?”'),
-    ask:L('らいげつは なんがつ？','Which month is next month?'),
+    say:L('「らいげつは ぼくの たんじょうび！ なんがつだろう？」','“My birthday is '+twDisplay(TW.month[3])+'! Which month is that?”'),
+    ask:L('らいげつは なんがつ？','Which month is '+twDisplay(TW.month[3])+'?'),
     opts:monthOpts(m,1),ans:'らいげつ ＝ '+((m+1)%12+1)+'月',sp:MON_JA[(m+1)%12]
   });
   sc.push({
-    say:L('「せんげつは ゆきが ふったんだよ。なんがつだった？」','“It snowed last month. Which month was that?”'),
-    ask:L('せんげつは なんがつ？','Which month was last month?'),
+    say:L('「せんげつは ゆきが ふったんだよ。なんがつだった？」','“It snowed '+twDisplay(TW.month[1])+'. Which month was that?”'),
+    ask:L('せんげつは なんがつ？','Which month is '+twDisplay(TW.month[1])+'?'),
     opts:monthOpts(m,-1),ans:'せんげつ ＝ '+((m+11)%12+1)+'月',sp:MON_JA[(m+11)%12]
   });
   var yw=pick(TW.year.filter(function(x){return x.off!==0;}));
   sc.push({
-    say:L('「'+yw.ja+'は なにを していたかな…。なんねんだっけ？」','“What was I doing '+yw.en+'… Which year was it?”'),
-    ask:L(yw.ja+'は なんねん？','Which year is '+yw.en+'?'),
+    say:L('「'+yw.ja+'は なにを していたかな…。なんねんだっけ？」','“What was I doing '+twDisplay(yw)+'… Which year was it?”'),
+    ask:L(yw.ja+'は なんねん？','Which year is '+twDisplay(yw)+'?'),
     opts:shuffle([yw.off].concat(shuffle([-2,-1,0,1,2].filter(function(o){return o!==yw.off;})).slice(0,3))).map(function(o){return {t:(Y+o)+'年',ok:o===yw.off};}),
     ans:yw.ja+' ＝ '+(Y+yw.off)+'年',sp:yw.ja
   });
