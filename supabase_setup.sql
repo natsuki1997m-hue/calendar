@@ -4,7 +4,7 @@
 
 create table if not exists cal_sessions (
   id           uuid primary key,
-  student_id   text not null,
+  student_id   uuid not null references students(id) on delete cascade,
   mode         text not null,          -- quiz / explore / train / memory / survival / story
   started_at   timestamptz not null,
   ended_at     timestamptz,
@@ -18,7 +18,7 @@ create table if not exists cal_sessions (
 
 create table if not exists cal_answers (
   id          bigint generated always as identity primary key,
-  student_id  text not null,
+  student_id  uuid not null references students(id) on delete cascade,
   session_id  uuid,
   mode        text not null,
   skill       text not null,           -- month / day / weekday / tw-day / tw-week / tw-month / tw-year / date-calc
