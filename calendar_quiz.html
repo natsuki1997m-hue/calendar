@@ -626,6 +626,85 @@ async function teacherDetail(st){
   add(lc,list,more);app.appendChild(lc);
 }
 
+/* ---------- 生徒さん用：わたしのきろく ---------- */
+var MODE_EN={quiz:'Normal Quiz',explore:'Calendar Explorer',train:'Time Travel Train',memory:'Pair Match',survival:'Reading Survival',story:'Time Machine Story'};
+async function myRecord(backFn,lang){
+  var en=lang==='en';
+  function T(ja,e){return en?e:ja;}
+  var st=CalAuth.student();
+  var app=appEl();app.className='';app.innerHTML='';window.scrollTo(0,0);
+  var top=mk('div','display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;');
+  add(top,mk('button',ghostCss,T('← もどる','← Back'),{on:{click:backFn}}));
+  add(app,top,mk('div','text-align:center;font-size:22px;font-weight:700;color:'+C.text+';line-height:1.4;margin-bottom:12px;','📊 '+(st?st.name:'')+T(' さんの きろく',"'s Progress")));
+  var wait=mk('div','text-align:center;color:'+C.sub+';padding:30px;','…');
+  app.appendChild(wait);
+  var ss,aa;
+  try{ss=await fetchAll('cal_sessions',st.id);aa=await fetchAll('cal_answers',st.id);}
+  catch(e){wait.textContent=T('よみこめませんでした。もういちど ためしてね','Could not load. Please try again.');wait.style.color=C.warn;return;}
+  wait.remove();
+  if(!ss.length){
+    var c0=cardEl();
+    add(c0,mk('div','text-align:center;font-size:40px;','🌱'),mk('div','text-align:center;font-size:16px;font-weight:700;color:'+C.text+';line-height:1.7;margin-top:6px;',T('まだ きろくが ないよ。\nゲームを あそぶと、ここに きろくが ふえるよ！','No records yet.\nPlay a game and your progress will show up here!')));
+    c0.lastChild.style.whiteSpace='pre-line';
+    app.appendChild(c0);return;
+  }
+  var R=analyze(ss,aa);
+  /* ひとこと */
+  var msg=R.improved.length?T('すごい！ まえは むずかしかった ことばが、できるように なったよ！','Great! You can now do words that used to be hard!')
+    :R.nAns<10?T('はじめの いっぽ！ あそぶほど、きろくが ふえるよ。','A great start! The more you play, the more you see here.')
+    :T('いい ちょうし！ このまま つづけよう！','Nice work! Keep it up!');
+  var hero=mk('div','background:#FFFDE7;border:3px solid #FFE082;border-radius:20px;padding:14px;margin-bottom:14px;text-align:center;font-size:16px;font-weight:700;color:'+C.text+';line-height:1.7;',msg);
+  app.appendChild(hero);
+  /* 数字 */
+  var grid=mk('div','display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;');
+  function stat(label,val){return add(mk('div','background:#fff;border:2px solid '+C.border+';border-radius:16px;padding:10px 6px;text-align:center;'),mk('div','font-size:11px;color:'+C.sub+';font-weight:700;',label),mk('div','font-size:22px;font-weight:700;color:'+C.text+';margin-top:2px;',val));}
+  add(grid,stat(T('あそんだ かいすう','Games played'),R.sessions.length+T(' かい','')),stat(T('この 1しゅうかん','This week'),R.days7+T(' にち',R.days7===1?' day':' days')),stat(T('せいかい','Correct answers'),R.nCor+T(' もん','')));
+  app.appendChild(grid);
+  function marks(o){
+    var m=mk('div','font-size:13px;letter-spacing:2px;white-space:nowrap;');
+    o.seq.slice(-8).forEach(function(v){m.appendChild(mk('span','color:'+(v?C.green:C.yellow)+';font-weight:700;',v?'○':'△'));});
+    return m;
+  }
+  function group(title,desc,list,limit,asChips){
+    if(!list.length)return null;
+    var card=cardEl();
+    add(card,mk('div','font-size:16px;font-weight:700;color:'+C.text+';',title),mk('div','font-size:12px;color:'+C.sub+';margin:3px 0 8px;line-height:1.6;',desc));
+    var shown=list.slice(0,limit);
+    if(asChips){
+      var chips=mk('div','display:flex;flex-wrap:wrap;gap:6px;');
+      shown.forEach(function(o){chips.appendChild(mk('span','font-size:14px;font-weight:700;padding:5px 14px;border-radius:50px;background:'+C.light+';color:'+C.text+';border:1px solid '+C.border+';',o.item));});
+      card.appendChild(chips);
+    }else{
+      shown.forEach(function(o){
+        var row=mk('div','display:flex;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px solid #E8F5E9;');
+        add(row,mk('div','flex:1;min-width:0;font-size:17px;font-weight:700;color:'+C.text+';',o.item),marks(o));
+        card.appendChild(row);
+      });
+    }
+    if(list.length>limit)card.appendChild(mk('div','font-size:12px;color:'+C.sub+';margin-top:8px;',T('ほかにも '+(list.length-limit)+'こ あるよ','and '+(list.length-limit)+' more')));
+    return card;
+  }
+  add(app,
+    group(T('🌱 できるように なったよ！','🌱 You can do it now!'),T('まえは むずかしかったのに、さいきん できているよ。','These used to be hard, but you are getting them now.'),R.improved,10,false),
+    group(T('⭐ よく できてるよ','⭐ You know these well'),T('せいかいが おおい ことばだよ。','Words you usually get right.'),R.good,16,true),
+    group(T('💪 もういちど れんしゅうしよう','💪 Let\'s practice these again'),T('○＝できた　△＝もうすこし。ゲームで あそんで おぼえよう！','○ = got it   △ = almost. Play games to remember them!'),R.declined.concat(R.tricky),10,false));
+  /* さいきん */
+  var rc=cardEl();
+  add(rc,mk('div','font-size:16px;font-weight:700;color:'+C.text+';margin-bottom:6px;',T('🗓️ さいきんの きろく','🗓️ Recent games')));
+  R.sessions.slice(0,5).forEach(function(s){
+    var ml=MODE_LABEL[s.mode]||['🎮',s.mode];
+    var row=mk('div','display:flex;align-items:center;gap:8px;padding:8px 2px;border-bottom:1px solid #E8F5E9;font-size:13px;color:'+C.text+';');
+    var d=new Date(s.started_at);
+    add(row,mk('div','color:'+C.sub+';width:52px;white-space:nowrap;',(d.getMonth()+1)+'/'+d.getDate()),
+      mk('div','flex:1;min-width:0;font-weight:700;',ml[0]+' '+(en?(MODE_EN[s.mode]||s.mode):ml[1])),
+      mk('div','font-weight:700;color:'+C.green+';white-space:nowrap;',s.mode==='memory'?s.correct+T(' ペア',' pairs'):s.correct+' / '+s.total));
+    rc.appendChild(row);
+  });
+  app.appendChild(rc);
+  app.appendChild(mk('button',btnCss,T('ゲームで あそぶ','Play games'),{on:{click:backFn}}));
+}
+CalAuth.myRecord=myRecord;
+
 window.CalAuth=CalAuth;window.Track=Track;
 })();
 </script>
@@ -1761,6 +1840,11 @@ function home(){
       m.k==='quiz'?null:h('div',{c:'st',t:starText(best[m.k]||0)})
     ]));
   });
+  app.appendChild(h('div',{c:'sec',t:L('きろく','My Progress')}));
+  app.appendChild(h('button',{c:'mode',on:{click:function(){CalAuth.myRecord(home,S.lang);}}},[
+    h('div',{c:'em',t:'📊'}),
+    h('div',{},[h('div',{c:'mt',t:L('わたしの きろく','My Progress')}),h('div',{c:'md',t:L('できるように なった ことばを みよう','See the words you have improved')})])
+  ]));
 }
 window.TimeGame={home:function(l){if(l)S.lang=l;home();}};
 CalAuth.start(home);
