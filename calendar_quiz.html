@@ -93,6 +93,503 @@ button{font-family:inherit;cursor:pointer;}
 </head>
 <body>
 <div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* ========== ログイン・記録・先生用ページ ========== */
+(function(){
+'use strict';
+var SUPA_URL='https://ozxlahysxpvxtzznzdoj.supabase.co';
+var SUPA_KEY='sb_publishable_wWMYDN0zawBXuAGi8AQyeg_9M-QQySW';
+var TEACHER_PW='kanji1teacher'; /* Kanji Practiceと同じ。変えたいときはここだけ書き換え */
+var NAME_KEY='calendarGameStudentName';
+var PEND_KEY='calendarGamePending';
+
+var C={green:'#7CB342',light:'#F1F8E9',border:'#AED581',text:'#33691E',sub:'#689F38',yellow:'#F9A825',orange:'#FFB74D',warn:'#BF360C',warnBg:'#FFF3E0',gray:'#9E9E9E'};
+var MODE_LABEL={quiz:['📘','ふつうのクイズ'],explore:['🗓️','カレンダーたんけん'],train:['🚂','タイムトラベルでんしゃ'],memory:['🃏','ペアさがし'],survival:['⚡','よみかたサバイバル'],story:['🐱','タイムマシンのものがたり']};
+var SKILL_ORDER=['month','day','weekday','tw-day','tw-week','tw-month','tw-year','date-calc'];
+var SKILL_LABEL={'month':'月の読み（いちがつ…）','day':'日の読み（ついたち…）','weekday':'曜日（げつようび…）','tw-day':'ことば：おととい・きのう・あした','tw-week':'ことば：せんしゅう・らいしゅう','tw-month':'ことば：せんげつ・らいげつ','tw-year':'ことば：きょねん・らいねん','date-calc':'日にちをたしかめる（あしたは何日？）'};
+var SKILL_SHORT={'month':'月の読み','day':'日の読み','weekday':'曜日','tw-day':'ひのことば','tw-week':'しゅうのことば','tw-month':'つきのことば','tw-year':'としのことば','date-calc':'日にちの計算'};
+var WK=['日','月','火','水','木','金','土'];
+
+/* ---------- 小さな部品 ---------- */
+function mk(tag,css,text,attrs){
+  var e=document.createElement(tag);
+  if(css)e.style.cssText=css;
+  if(text!=null)e.textContent=text;
+  if(attrs){for(var k in attrs){if(k==='on'){for(var ev in attrs.on)e.addEventListener(ev,attrs.on[ev]);}else e[k]=attrs[k];}}
+  return e;
+}
+function add(p){for(var i=1;i<arguments.length;i++){if(arguments[i])p.appendChild(arguments[i]);}return p;}
+function appEl(){return document.getElementById('app');}
+function norm(s){return String(s==null?'':s).normalize('NFKC').trim().replace(/\s+/g,' ').toLowerCase();}
+function pct(c,t){return t?Math.round(c/t*100):0;}
+function fmtDT(iso){var d=new Date(iso);return (d.getMonth()+1)+'/'+d.getDate()+'（'+WK[d.getDay()]+'）'+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);}
+function fmtDur(sec){if(!sec||sec<1)return '—';var m=Math.floor(sec/60),s=sec%60;return m?m+'分'+(s?s+'秒':''):s+'秒';}
+function fmtTotal(sec){var h=Math.floor(sec/3600),m=Math.round((sec%3600)/60);return h?h+'時間'+m+'分':m+'分';}
+function rateColor(r,n){if(n<5)return C.gray;return r>=85?C.green:r>=60?C.yellow:C.orange;}
+(function(){
+  var st=document.createElement('style');
+  st.textContent='#app.wide{max-width:880px;}.tr-row{display:flex;align-items:center;gap:8px;padding:9px 4px;border-bottom:1px solid #E8F5E9;font-size:13px;color:#33691E;}.tr-row:last-child{border-bottom:none;}.tr-click{cursor:pointer;}.tr-click:active{background:#F1F8E9;}';
+  document.head.appendChild(st);
+})();
+var btnCss='display:block;width:100%;padding:14px;font-size:16px;font-weight:700;border:none;border-radius:50px;background:#F9A825;color:#fff;cursor:pointer;margin-top:12px;font-family:inherit;';
+var ghostCss='display:inline-block;padding:7px 18px;font-size:13px;font-weight:700;border:2px solid #AED581;border-radius:50px;background:#F1F8E9;color:#33691E;cursor:pointer;font-family:inherit;';
+function cardEl(){return mk('div','background:#fff;border:2px solid '+C.border+';border-radius:20px;padding:16px;margin-bottom:14px;');}
+function h2(t){return mk('div','font-size:15px;font-weight:700;color:'+C.text+';margin-bottom:10px;',t);}
+
+/* ---------- 認証・Supabase ---------- */
+var CalAuth=(function(){
+  var supa=null,student=null,homeCb=null;
+  function client(){
+    if(supa)return supa;
+    if(!window.supabase||!window.supabase.createClient)return null;
+    supa=window.supabase.createClient(SUPA_URL,SUPA_KEY);
+    return supa;
+  }
+  function start(cb){homeCb=cb;var n='';try{n=localStorage.getItem(NAME_KEY)||'';}catch(e){}showLogin('',n);}
+
+  function showLogin(msg,prefill){
+    Track.abandon();student=null;
+    var app=appEl();app.className='';app.innerHTML='';window.scrollTo(0,0);
+    add(app,
+      mk('div','font-size:54px;text-align:center;margin-top:24px;','📅'),
+      mk('div','text-align:center;font-size:22px;font-weight:700;color:'+C.text+';line-height:1.4;margin:6px 0;','にほんご カレンダー あそび'),
+      mk('div','text-align:center;font-size:13px;color:'+C.sub+';margin-bottom:18px;line-height:1.6;','なまえを いれて、ログインしてね'));
+    var card=cardEl();
+    var inp=mk('input','width:100%;font-size:18px;font-weight:700;padding:12px 18px;border-radius:50px;border:2px solid '+C.border+';background:'+C.light+';color:'+C.text+';outline:none;font-family:inherit;text-align:center;',null,{type:'text',placeholder:'なまえ / Name',autocomplete:'off'});
+    inp.value=prefill||'';
+    var msgEl=mk('div','min-height:20px;margin-top:10px;text-align:center;font-size:13px;font-weight:700;color:'+C.warn+';',msg||'');
+    var go=mk('button',btnCss,'ログイン / Login');
+    function submit(){tryLogin(inp.value,msgEl,card,go);}
+    go.addEventListener('click',submit);
+    inp.addEventListener('keydown',function(e){if(e.key==='Enter'){if(e.isComposing||e.keyCode===229)return;submit();}});
+    add(card,inp,msgEl,go);
+    app.appendChild(card);
+    add(app,mk('div','text-align:center;margin-top:34px;font-size:12px;color:#aaa;text-decoration:underline;cursor:pointer;','先生はこちら',{on:{click:teacherLogin}}));
+    setTimeout(function(){try{inp.focus();}catch(e){}},50);
+  }
+
+  async function tryLogin(raw,msgEl,card,go){
+    var name=String(raw||'').trim();
+    if(!name){msgEl.textContent='なまえを いれてね / Please enter your name';return;}
+    var c=client();
+    if(!c){msgEl.textContent='つながりません。ネットを たしかめてね / No connection';return;}
+    go.disabled=true;msgEl.style.color=C.sub;msgEl.textContent='…';
+    try{
+      var r=await c.from('students').select('*');
+      if(r.error)throw r.error;
+      var key=norm(name);
+      var found=(r.data||[]).filter(function(s){return norm(s.name)===key;})[0];
+      if(found){finishLogin(found);return;}
+      /* はじめての名前：打ち間違いで新しい生徒さんを作らないよう確認する */
+      go.disabled=false;msgEl.textContent='';
+      card.innerHTML='';
+      add(card,
+        mk('div','text-align:center;font-size:15px;font-weight:700;color:'+C.text+';line-height:1.7;','はじめまして！'),
+        mk('div','text-align:center;font-size:24px;font-weight:700;color:'+C.text+';margin:8px 0;',name),
+        mk('div','text-align:center;font-size:13px;color:'+C.sub+';line-height:1.6;','この なまえで はじめますか？\nStart with this name?'));
+      card.lastChild.style.whiteSpace='pre-line';
+      var yes=mk('button',btnCss,'はい / Yes',{on:{click:async function(){
+        yes.disabled=true;
+        try{
+          var ins=await c.from('students').insert({name:name}).select().single();
+          if(ins.error||!ins.data)throw (ins.error||new Error('insert failed'));
+          finishLogin(ins.data);
+        }catch(e){yes.disabled=false;showLogin('つながりません。もういちど ためしてね',name);}
+      }}});
+      var no=mk('button',btnCss+'background:#fff;color:'+C.sub+';border:2px solid '+C.border+';','なおす / Back',{on:{click:function(){showLogin('',name);}}});
+      add(card,yes,no);
+    }catch(e){
+      go.disabled=false;msgEl.style.color=C.warn;
+      msgEl.textContent='つながりません。もういちど ためしてね / Could not connect';
+    }
+  }
+  function finishLogin(s){
+    student=s;
+    try{localStorage.setItem(NAME_KEY,s.name);}catch(e){}
+    Track.retryPending();
+    appEl().className='';
+    if(homeCb)homeCb();
+  }
+  function logout(){showLogin('','');}
+  function chip(){
+    var row=mk('div','display:flex;align-items:center;justify-content:center;gap:10px;margin:0 0 10px;font-size:13px;color:'+C.sub+';font-weight:700;');
+    add(row,mk('span','','👤 '+(student?student.name:'')),mk('button','background:none;border:none;color:#9E9E9E;text-decoration:underline;font-size:12px;cursor:pointer;font-family:inherit;','ログアウト',{on:{click:logout}}));
+    return row;
+  }
+  function getStudent(){return student;}
+  return {start:start,client:client,student:getStudent,chip:chip,logout:logout,showLogin:showLogin};
+})();
+
+/* ---------- 記録 ---------- */
+var Track=(function(){
+  var cur=null;
+  function uuid(){
+    if(window.crypto&&crypto.randomUUID)return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0;return (c==='x'?r:(r&3|8)).toString(16);});
+  }
+  function loadQ(){try{return JSON.parse(localStorage.getItem(PEND_KEY))||[];}catch(e){return [];}}
+  function saveQ(q){try{localStorage.setItem(PEND_KEY,JSON.stringify(q.slice(-500)));}catch(e){}}
+  function queue(table,row,op){
+    var q=loadQ();
+    if(op==='upsert'){q=q.filter(function(x){return !(x.t===table&&x.op==='upsert'&&x.r.id===row.id);});}
+    q.push({t:table,r:row,op:op});saveQ(q);
+  }
+  function send(table,row,op){
+    var c=CalAuth.client();
+    if(!c)return Promise.reject(new Error('no client'));
+    var p=op==='upsert'?c.from(table).upsert(row):c.from(table).insert(row);
+    return Promise.resolve(p).then(function(res){if(res&&res.error)throw res.error;});
+  }
+  function fire(table,row,op){send(table,row,op).catch(function(){queue(table,row,op);});}
+  function retryPending(){
+    var q=loadQ();if(!q.length)return;
+    saveQ([]);
+    q.forEach(function(x){fire(x.t,x.r,x.op);});
+  }
+  function sessionRow(finished,stars){
+    var s=CalAuth.student();
+    var total=cur.ovr?cur.ovr.total:cur.total,correct=cur.ovr?cur.ovr.correct:cur.correct;
+    return {
+      id:cur.id,student_id:String(s.id),mode:cur.mode,
+      started_at:new Date(cur.t0).toISOString(),ended_at:new Date(cur.last).toISOString(),
+      duration_sec:Math.round((cur.last-cur.t0)/1000),
+      total:total,correct:correct,finished:!!finished,stars:stars==null?null:stars,meta:cur.meta||null
+    };
+  }
+  function begin(mode,meta){
+    if(!CalAuth.student()){cur=null;return;}
+    cur={id:uuid(),mode:mode,t0:Date.now(),last:Date.now(),total:0,correct:0,ovr:null,meta:meta||null};
+  }
+  function q(skill,item,ok,given){
+    var s=CalAuth.student();
+    if(!cur||!s)return;
+    cur.total++;if(ok)cur.correct++;cur.last=Date.now();
+    fire('cal_answers',{student_id:String(s.id),session_id:cur.id,mode:cur.mode,skill:skill,item:item==null?null:String(item),correct:!!ok,given:given==null?null:String(given)},'insert');
+    fire('cal_sessions',sessionRow(false,null),'upsert');
+  }
+  function totals(total,correct){if(cur)cur.ovr={total:total,correct:correct};}
+  function end(stars,tot){
+    if(!cur||!CalAuth.student()){cur=null;return;}
+    if(tot)cur.ovr=tot;
+    cur.last=Date.now();
+    fire('cal_sessions',sessionRow(true,stars),'upsert');
+    cur=null;
+  }
+  function abandon(){cur=null;}
+  return {begin:begin,q:q,end:end,totals:totals,abandon:abandon,retryPending:retryPending};
+})();
+
+/* ---------- 先生用ページ ---------- */
+function teacherLogin(){
+  var pw=prompt('パスワードを入力してください:');
+  if(pw===null)return;
+  if(pw===TEACHER_PW){teacherList();}else{alert('パスワードが違います');}
+}
+async function fetchAll(table,studentId){
+  var c=CalAuth.client();
+  var out=[],from=0,step=1000;
+  for(;;){
+    var q=c.from(table).select('*');
+    if(studentId!=null)q=q.eq('student_id',String(studentId));
+    q=q.order(table==='cal_sessions'?'started_at':'created_at',{ascending:false}).range(from,from+step-1);
+    var r=await q;
+    if(r.error)throw r.error;
+    out=out.concat(r.data||[]);
+    if(!r.data||r.data.length<step||out.length>=20000)break;
+    from+=step;
+  }
+  return out;
+}
+function teacherShell(title,backFn,backLabel){
+  var app=appEl();app.className='wide';app.innerHTML='';window.scrollTo(0,0);
+  var top=mk('div','display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap;');
+  add(top,mk('button',ghostCss,backLabel,{on:{click:backFn}}),mk('div','font-size:12px;color:'+C.sub+';font-weight:700;','🧑‍🏫 先生用ページ'));
+  add(app,top,mk('div','font-size:22px;font-weight:700;color:'+C.text+';margin-bottom:12px;line-height:1.4;',title));
+  return app;
+}
+async function teacherList(){
+  var app=teacherShell('生徒さんの記録',function(){CalAuth.showLogin('','');},'← ログイン画面へ');
+  var wait=mk('div','text-align:center;color:'+C.sub+';padding:30px;','読み込み中…');
+  app.appendChild(wait);
+  var students,sessions;
+  try{
+    var c=CalAuth.client();
+    if(!c)throw new Error('no client');
+    var r=await c.from('students').select('*');
+    if(r.error)throw r.error;
+    students=r.data||[];
+    sessions=await fetchAll('cal_sessions',null);
+  }catch(e){
+    wait.textContent='読み込めませんでした。supabase_setup.sql を実行したか、ネットにつながっているか確認してください。（'+(e.message||e)+'）';
+    wait.style.color=C.warn;return;
+  }
+  wait.remove();
+  var by={};
+  sessions.forEach(function(s){(by[s.student_id]=by[s.student_id]||[]).push(s);});
+  var rows=students.map(function(st){
+    var ss=by[String(st.id)]||[];
+    var tot=0,cor=0,dur=0,last=null;
+    ss.forEach(function(s){tot+=s.total||0;cor+=s.correct||0;dur+=s.duration_sec||0;if(!last||s.started_at>last)last=s.started_at;});
+    return {st:st,n:ss.length,tot:tot,cor:cor,dur:dur,last:last};
+  });
+  var played=rows.filter(function(r){return r.n>0;}).sort(function(a,b){return a.last<b.last?1:-1;});
+  var none=rows.filter(function(r){return r.n===0;}).sort(function(a,b){return String(a.st.name).localeCompare(String(b.st.name),'ja');});
+  var card=cardEl();
+  add(card,h2('遊んだ生徒さん（'+played.length+'人）　新しい順'));
+  if(!played.length)add(card,mk('div','font-size:13px;color:'+C.sub+';padding:8px;','まだ記録がありません。生徒さんがログインして遊ぶと、ここに出てきます。'));
+  played.forEach(function(r){
+    var rate=pct(r.cor,r.tot);
+    var row=mk('div','','',{className:'tr-row tr-click'});
+    add(row,
+      mk('div','flex:1;min-width:0;font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;',r.st.name),
+      mk('div','font-size:12px;color:'+C.sub+';white-space:nowrap;','最終 '+fmtDT(r.last)),
+      mk('div','font-size:12px;color:'+C.sub+';width:48px;text-align:right;',r.n+'回'),
+      mk('div','font-size:14px;font-weight:700;width:48px;text-align:right;color:'+rateColor(rate,r.tot)+';',rate+'%'),
+      mk('div','color:#aaa;','›'));
+    row.addEventListener('click',function(){teacherDetail(r.st);});
+    card.appendChild(row);
+  });
+  app.appendChild(card);
+  if(none.length){
+    var c2=cardEl();
+    add(c2,h2('まだ記録がない生徒さん（'+none.length+'人）'));
+    var chips=mk('div','display:flex;flex-wrap:wrap;gap:6px;');
+    none.forEach(function(r){chips.appendChild(mk('span','font-size:12px;padding:4px 12px;border-radius:50px;background:'+C.light+';color:'+C.sub+';',r.st.name));});
+    add(c2,chips);app.appendChild(c2);
+  }
+}
+
+/* ----- 分析 ----- */
+function analyze(ss,aa){
+  var R={};
+  R.sessions=ss;R.answers=aa;
+  R.nAns=aa.length;
+  R.nCor=aa.filter(function(a){return a.correct;}).length;
+  R.skills={};
+  aa.forEach(function(a){var o=R.skills[a.skill]||(R.skills[a.skill]={n:0,c:0});o.n++;if(a.correct)o.c++;});
+  var it={};
+  aa.forEach(function(a){
+    if(!a.item)return;
+    var k=a.skill+'|'+a.item;
+    var o=it[k]||(it[k]={skill:a.skill,item:a.item,n:0,c:0,wrong:{}});
+    o.n++;if(a.correct)o.c++;else if(a.given){o.wrong[a.given]=(o.wrong[a.given]||0)+1;}
+  });
+  var items=Object.keys(it).map(function(k){return it[k];});
+  items.forEach(function(o){
+    var best=null,bn=0;for(var g in o.wrong){if(o.wrong[g]>bn){bn=o.wrong[g];best=g;}}
+    o.topWrong=best;o.rate=o.c/o.n;
+  });
+  R.weak=items.filter(function(o){return o.n>=3&&o.rate<0.6;}).sort(function(a,b){return a.rate-b.rate||b.n-a.n;}).slice(0,10);
+  R.strong=items.filter(function(o){return o.n>=4&&o.rate>=0.9;}).sort(function(a,b){return b.n-a.n;}).slice(0,10);
+  /* ゲーム別 */
+  R.modes={};
+  ss.forEach(function(s){
+    var o=R.modes[s.mode]||(R.modes[s.mode]={n:0,tot:0,cor:0,fin:0,best:0});
+    o.n++;o.tot+=s.total||0;o.cor+=s.correct||0;if(s.finished)o.fin++;
+    if(s.total>0)o.best=Math.max(o.best,pct(s.correct,s.total));
+  });
+  R.totalSec=ss.reduce(function(a,s){return a+(s.duration_sec||0);},0);
+  R.last=ss.length?ss.reduce(function(a,s){return s.started_at>a?s.started_at:a;},ss[0].started_at):null;
+  /* 推移 */
+  R.series=ss.filter(function(s){return s.total>=5&&s.finished;}).sort(function(a,b){return a.started_at<b.started_at?-1:1;});
+  function acc(arr){var t=0,c=0;arr.forEach(function(s){t+=s.total;c+=s.correct;});return t?c/t:0;}
+  R.trend=null;
+  if(R.series.length>=4){
+    var recent=R.series.slice(-5);
+    var prev=R.series.slice(Math.max(0,R.series.length-10),R.series.length-recent.length);
+    if(prev.length>=2){R.trend={recent:acc(recent),prev:acc(prev),diff:(acc(recent)-acc(prev))*100};}
+  }
+  /* 遊び方 */
+  var now=Date.now();
+  var days={};ss.forEach(function(s){var d=new Date(s.started_at);if(now-d.getTime()<7*86400000)days[d.toDateString()]=1;});
+  R.days7=Object.keys(days).length;
+  R.daysAgo=R.last?Math.floor((now-new Date(R.last).getTime())/86400000):null;
+  var wd={},band={};
+  ss.forEach(function(s){
+    var d=new Date(s.started_at);wd[d.getDay()]=(wd[d.getDay()]||0)+1;
+    var hr=d.getHours();var b=hr<5?'深夜':hr<11?'朝':hr<17?'昼':'夜';band[b]=(band[b]||0)+1;
+  });
+  function top(o){var k=null,n=0;for(var x in o){if(o[x]>n){n=o[x];k=x;}}return k;}
+  R.topWd=top(wd);R.topBand=top(band);
+  R.quitRate=ss.length?ss.filter(function(s){return !s.finished;}).length/ss.length:0;
+  return R;
+}
+function comments(R){
+  var out=[];
+  var rate=pct(R.nCor,R.nAns);
+  if(R.nAns<20){
+    out.push(['🌱','まだデータが少ないので（'+R.nAns+'問）、傾向はこれからです。あと数回遊ぶと得意・苦手がはっきりしてきます。']);
+  }
+  var sk=SKILL_ORDER.filter(function(k){return R.skills[k];}).map(function(k){var o=R.skills[k];return {k:k,n:o.n,r:o.c/o.n};});
+  var good=sk.filter(function(x){return x.n>=6&&x.r>=0.85;}).sort(function(a,b){return b.r-a.r;});
+  var bad=sk.filter(function(x){return x.n>=6&&x.r<0.7;}).sort(function(a,b){return a.r-b.r;});
+  if(good.length)out.push(['⭐','得意：'+good.map(function(x){return SKILL_SHORT[x.k]+'（'+Math.round(x.r*100)+'%）';}).join('、')+'。安定してできています。']);
+  if(bad.length)out.push(['🔧','これから：'+bad.map(function(x){return SKILL_SHORT[x.k]+'（'+Math.round(x.r*100)+'%）';}).join('、')+'。次のレッスンで一緒に確認すると伸びそうです。']);
+  if(R.nAns>=20&&!good.length&&!bad.length)out.push(['📊','全体の正答率は '+rate+'% です。分野ごとの差はまだ大きくありません。']);
+  if(R.weak.length){
+    out.push(['🔍','つまずきやすいことば：'+R.weak.slice(0,5).map(function(o){return '「'+o.item+'」';}).join('')+'。（下の表に、よくある間違いも出しています）']);
+  }
+  if(R.trend){
+    if(R.trend.diff>=8)out.push(['📈','直近の正答率は '+Math.round(R.trend.recent*100)+'%。その前（'+Math.round(R.trend.prev*100)+'%）より伸びています。']);
+    else if(R.trend.diff<=-8)out.push(['📉','直近の正答率は '+Math.round(R.trend.recent*100)+'%。その前（'+Math.round(R.trend.prev*100)+'%）より少し下がっています。難しい分野を選んでいるだけかもしれません。']);
+    else out.push(['➡️','直近の正答率は '+Math.round(R.trend.recent*100)+'%で、安定しています。']);
+  }
+  if(R.daysAgo!=null){
+    if(R.daysAgo>=7)out.push(['💤','最後に遊んだのは '+R.daysAgo+' 日前です。声をかけてあげるとよさそうです。']);
+    else out.push(['🗓️','この1週間で '+R.days7+' 日遊んでいます。'+(R.topWd!=null&&R.sessions.length>=4?'いつもは '+WK[R.topWd]+'曜日・'+R.topBand+'に遊ぶことが多いです。':'')]);
+  }
+  if(R.sessions.length>=3&&R.quitRate>=0.4)out.push(['🚪','途中でやめる回が多めです（'+Math.round(R.quitRate*100)+'%）。ゲームの長さや難しさが合っているか見てあげてください。']);
+  return out;
+}
+
+function barRow(label,n,c){
+  var r=pct(c,n),col=rateColor(r,n);
+  var row=mk('div','margin-bottom:10px;');
+  var head=mk('div','display:flex;justify-content:space-between;gap:8px;font-size:13px;font-weight:700;color:'+C.text+';margin-bottom:3px;');
+  add(head,mk('span','',label),mk('span','color:'+col+';white-space:nowrap;',r+'%（'+c+'/'+n+'）'+(n<5?' データ少':'')));
+  var track=mk('div','height:10px;background:#E8F5E9;border-radius:6px;overflow:hidden;');
+  add(track,mk('div','height:10px;border-radius:6px;background:'+col+';width:'+r+'%;'));
+  add(row,head,track);
+  return row;
+}
+function trendSvg(series){
+  var data=series.slice(-20);
+  var W=560,H=170,pl=34,pr=12,pt=12,pb=26;
+  var ns='http://www.w3.org/2000/svg';
+  function se(tag,attrs){var e=document.createElementNS(ns,tag);for(var k in attrs)e.setAttribute(k,attrs[k]);return e;}
+  var svg=se('svg',{viewBox:'0 0 '+W+' '+H,width:'100%',role:'img','aria-label':'正答率の推移'});
+  svg.style.display='block';svg.style.maxWidth='100%';
+  [0,50,100].forEach(function(v){
+    var y=pt+(100-v)/100*(H-pt-pb);
+    svg.appendChild(se('line',{x1:pl,x2:W-pr,y1:y,y2:y,stroke:'#DCEDC8','stroke-width':1}));
+    var t=se('text',{x:pl-6,y:y+4,'text-anchor':'end','font-size':11,fill:'#689F38'});t.textContent=v+'%';svg.appendChild(t);
+  });
+  var n=data.length,pts=[];
+  data.forEach(function(s,i){
+    var x=n===1?(pl+W-pr)/2:pl+i*(W-pl-pr)/(n-1);
+    var y=pt+(100-pct(s.correct,s.total))/100*(H-pt-pb);
+    pts.push([x,y,s]);
+  });
+  if(pts.length>1)svg.appendChild(se('polyline',{points:pts.map(function(p){return p[0]+','+p[1];}).join(' '),fill:'none',stroke:C.green,'stroke-width':2.5,'stroke-linejoin':'round'}));
+  pts.forEach(function(p){
+    var c=se('circle',{cx:p[0],cy:p[1],r:4.5,fill:'#fff',stroke:C.green,'stroke-width':2.5});
+    var tt=se('title',{});tt.textContent=fmtDT(p[2].started_at)+'　'+(MODE_LABEL[p[2].mode]?MODE_LABEL[p[2].mode][1]:p[2].mode)+'　'+p[2].correct+'/'+p[2].total;
+    c.appendChild(tt);svg.appendChild(c);
+  });
+  [0,n-1].forEach(function(i,k){
+    if(!pts[i]||(k===1&&n===1))return;
+    var d=new Date(pts[i][2].started_at);
+    var t=se('text',{x:pts[i][0],y:H-8,'text-anchor':i===0&&n>1?'start':n>1?'end':'middle','font-size':11,fill:'#689F38'});
+    t.textContent=(d.getMonth()+1)+'/'+d.getDate();svg.appendChild(t);
+  });
+  return svg;
+}
+
+async function teacherDetail(st){
+  var app=teacherShell(st.name+' さん',teacherList,'← 生徒一覧へ');
+  var wait=mk('div','text-align:center;color:'+C.sub+';padding:30px;','読み込み中…');
+  app.appendChild(wait);
+  var ss,aa;
+  try{ss=await fetchAll('cal_sessions',st.id);aa=await fetchAll('cal_answers',st.id);}
+  catch(e){wait.textContent='読み込めませんでした（'+(e.message||e)+'）';wait.style.color=C.warn;return;}
+  wait.remove();
+  var R=analyze(ss,aa);
+  if(!ss.length){add(app,mk('div','padding:20px;color:'+C.sub+';font-size:14px;','まだ記録がありません。'));return;}
+
+  /* 数字のまとめ */
+  var sum=cardEl();
+  var grid=mk('div','display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;');
+  function stat(label,val,col){return add(mk('div','background:'+C.light+';border-radius:14px;padding:10px 12px;text-align:center;'),mk('div','font-size:11px;color:'+C.sub+';font-weight:700;',label),mk('div','font-size:20px;font-weight:700;color:'+(col||C.text)+';margin-top:2px;',val));}
+  var rate=pct(R.nCor,R.nAns);
+  add(grid,stat('遊んだ回数',R.sessions.length+'回'),stat('答えた問題',R.nAns+'問'),stat('正答率',R.nAns?rate+'%':'—',R.nAns?rateColor(rate,R.nAns):null),stat('遊んだ時間',fmtTotal(R.totalSec)),stat('最後に遊んだ日',fmtDT(R.last)));
+  add(sum,grid);app.appendChild(sum);
+
+  /* 自動コメント */
+  var cm=cardEl();add(cm,h2('📝 自動まとめ'));
+  comments(R).forEach(function(c){
+    var row=mk('div','display:flex;gap:10px;padding:7px 0;font-size:14px;line-height:1.7;color:'+C.text+';');
+    add(row,mk('div','font-size:18px;line-height:1.5;',c[0]),mk('div','flex:1;',c[1]));cm.appendChild(row);
+  });
+  app.appendChild(cm);
+
+  /* 分野別 */
+  var sc=cardEl();add(sc,h2('分野ごとの正答率'));
+  var any=false;
+  SKILL_ORDER.forEach(function(k){var o=R.skills[k];if(o){any=true;sc.appendChild(barRow(SKILL_LABEL[k],o.n,o.c));}});
+  if(!any)add(sc,mk('div','font-size:13px;color:'+C.sub+';','まだ記録がありません。'));
+  add(sc,mk('div','font-size:11px;color:'+C.gray+';margin-top:4px;','緑 85%以上 ／ 黄 60〜84% ／ オレンジ 60%未満 ／ グレーは5問未満でデータ少。ペアさがし（むずかしい）は問題ごとの記録はとっていません。'));
+  app.appendChild(sc);
+
+  /* 推移 */
+  if(R.series.length>=2){
+    var tc=cardEl();add(tc,h2('正答率の推移（最近の'+Math.min(20,R.series.length)+'回）'),trendSvg(R.series));
+    add(tc,mk('div','font-size:11px;color:'+C.gray+';margin-top:4px;','5問以上を最後まで遊んだ回だけ表示。点にふれると日時とゲーム名が見られます。'));
+    app.appendChild(tc);
+  }
+
+  /* 苦手・得意なことば */
+  var wc=cardEl();add(wc,h2('つまずきやすいことば'));
+  if(!R.weak.length)add(wc,mk('div','font-size:13px;color:'+C.sub+';line-height:1.7;','いまのところ、3回以上出て正答率60%未満のことばはありません。'));
+  R.weak.forEach(function(o){
+    var row=mk('div','','',{className:'tr-row'});
+    add(row,
+      mk('div','flex:1;min-width:0;font-size:15px;font-weight:700;','「'+o.item+'」'),
+      mk('div','font-size:11px;color:'+C.sub+';',SKILL_SHORT[o.skill]||o.skill),
+      mk('div','font-size:13px;font-weight:700;color:'+C.warn+';width:84px;text-align:right;',Math.round(o.rate*100)+'%（'+o.c+'/'+o.n+'）'));
+    wc.appendChild(row);
+    if(o.topWrong)wc.appendChild(mk('div','font-size:12px;color:'+C.sub+';padding:0 4px 8px;','よくある答え：'+o.topWrong));
+  });
+  if(R.strong.length){
+    add(wc,mk('div','font-size:13px;font-weight:700;color:'+C.text+';margin:14px 0 6px;','よくできることば'));
+    var chips=mk('div','display:flex;flex-wrap:wrap;gap:6px;');
+    R.strong.forEach(function(o){chips.appendChild(mk('span','font-size:13px;padding:4px 12px;border-radius:50px;background:'+C.light+';color:'+C.text+';border:1px solid '+C.border+';',o.item));});
+    wc.appendChild(chips);
+  }
+  app.appendChild(wc);
+
+  /* ゲーム別 */
+  var mc=cardEl();add(mc,h2('ゲームごとの様子'));
+  Object.keys(MODE_LABEL).forEach(function(k){
+    var o=R.modes[k];if(!o)return;
+    var row=mk('div','','',{className:'tr-row'});
+    add(row,
+      mk('div','font-size:20px;width:28px;text-align:center;',MODE_LABEL[k][0]),
+      mk('div','flex:1;min-width:0;font-size:14px;font-weight:700;',MODE_LABEL[k][1]),
+      mk('div','font-size:12px;color:'+C.sub+';white-space:nowrap;',o.n+'回'),
+      mk('div','font-size:12px;color:'+C.sub+';white-space:nowrap;width:92px;text-align:right;','平均 '+pct(o.cor,o.tot)+'% ／ 最高 '+o.best+'%'));
+    mc.appendChild(row);
+  });
+  app.appendChild(mc);
+
+  /* 記録 */
+  var lc=cardEl();add(lc,h2('あそんだ記録'));
+  var shown=30;
+  var list=mk('div');
+  var more=mk('button',ghostCss+'margin-top:10px;','もっと見る');
+  function paint(){
+    list.innerHTML='';
+    R.sessions.slice(0,shown).forEach(function(s){
+      var r=pct(s.correct,s.total);
+      var row=mk('div','','',{className:'tr-row'});
+      var ml=MODE_LABEL[s.mode]||['🎮',s.mode];
+      add(row,
+        mk('div','font-size:12px;color:'+C.sub+';width:104px;white-space:nowrap;',fmtDT(s.started_at)),
+        mk('div','flex:1;min-width:0;font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;',ml[0]+' '+ml[1]+(s.finished?'':'（途中）')),
+        mk('div','font-size:12px;color:'+C.sub+';width:52px;text-align:right;white-space:nowrap;',fmtDur(s.duration_sec)),
+        mk('div','font-size:13px;font-weight:700;width:86px;text-align:right;color:'+rateColor(r,s.total)+';white-space:nowrap;',s.mode==='memory'&&s.total?s.correct+'ペア/'+s.total+'手':s.correct+'/'+s.total+'（'+r+'%）'));
+      list.appendChild(row);
+    });
+    more.style.display=R.sessions.length>shown?'inline-block':'none';
+  }
+  more.addEventListener('click',function(){shown+=50;paint();});
+  paint();
+  add(lc,list,more);app.appendChild(lc);
+}
+
+window.CalAuth=CalAuth;window.Track=Track;
+})();
+</script>
 <script>
 var MONTHS_JA=['いちがつ','にがつ','さんがつ','しがつ','ごがつ','ろくがつ','しちがつ','はちがつ','くがつ','じゅうがつ','じゅういちがつ','じゅうにがつ'];
 var DAYS_JA=['ついたち','ふつか','みっか','よっか','いつか','むいか','なのか','ようか','ここのか','とおか','じゅういちにち','じゅうににち','じゅうさんにち','じゅうよっか','じゅうごにち','じゅうろくにち','じゅうしちにち','じゅうはちにち','じゅうくにち','はつか','にじゅういちにち','にじゅうににち','にじゅうさんにち','にじゅうよっか','にじゅうごにち','にじゅうろくにち','にじゅうしちにち','にじゅうはちにち','にじゅうくにち','さんじゅうにち','さんじゅういちにち'];
@@ -221,6 +718,7 @@ function calCard(q){
 }
 
 function showSetup(){
+  Track.abandon();
   app.innerHTML='';
   var hb=document.createElement('button');
   hb.textContent=(lang==='en'?'← Home':'← ホームへ');
@@ -304,7 +802,7 @@ function startQuiz(){
   var pool=[];
   for(var i=0;i<totalQ;i++){if(on.length>=2&&i%3===2)pool.push('full');else pool.push(on[i%on.length]);}
   qs=shuffle(pool).slice(0,totalQ).map(function(tp){return genQ(tp);});
-  cur=0;score=0;answered=false;showQuiz();
+  Track.begin('quiz');cur=0;score=0;answered=false;showQuiz();
 }
 
 var tlm={month:function(){return t('typeMonth');},day:function(){return t('typeDay');},weekday:function(){return t('typeWeekday');},full:function(){return t('typeFull');}};
@@ -346,7 +844,7 @@ function showQuiz(){
       row.appendChild(lbl);
       var inp=el('input','width:100%;font-size:17px;font-weight:700;padding:10px 14px;border-radius:50px;border:2px solid '+YG.primaryBorder+';background:'+YG.primaryLight+';color:'+YG.text+';outline:none;box-sizing:border-box;');
       inp.type='text';inp.placeholder=t('placeholder');inp.autocomplete='off';
-      inp.dataset.answer=part.answer;
+      inp.dataset.answer=part.answer;inp.dataset.key=part.key;
       row.appendChild(inp);
       card.appendChild(row);
       inputs.push(inp);
@@ -364,6 +862,7 @@ function showQuiz(){
       inputs.forEach(function(inp){
         var ua=norm(inp.value),ca=norm(inp.dataset.answer);
         if(ua!==ca)allOk=false;
+        Track.q(inp.dataset.key,inp.dataset.answer,ua===ca,inp.value.trim());
         correctAns.push(inp.dataset.answer);
       });
       fb.style.display='block';
@@ -393,6 +892,7 @@ function showQuiz(){
     app.appendChild(hintBtn);
     hintBtn.addEventListener('click',function(){
       if(answered)return;answered=true;
+      inputs.forEach(function(inp){Track.q(inp.dataset.key,inp.dataset.answer,false,'(こたえをみた)');});
       var correctAns=inputs.map(function(inp){return inp.dataset.answer;});
       fb.style.cssText='margin-top:12px;padding:10px 16px;border-radius:14px;font-size:15px;font-weight:700;background:'+YG.hint.bg+';color:'+YG.hint.text+';border:2px solid '+YG.hint.border+';display:block;font-family:'+ff()+';';
       fb.textContent=t('hintLabel')+'「'+correctAns.join('  ')+'」';
@@ -418,6 +918,7 @@ function showQuiz(){
     function doCheck(){
       if(answered)return;answered=true;
       var ua=norm(inp.value),ca=norm(answer);
+      Track.q(q.type,answer,ua===ca,inp.value.trim());
       fb.style.display='block';
       if(ua===ca){
         score++;scoreEl.textContent='⭐ '+score+' / '+totalQ;
@@ -433,6 +934,7 @@ function showQuiz(){
     inp.addEventListener('keydown',function(e){if(e.key==='Enter')doCheck();});
     hintBtn.addEventListener('click',function(){
       if(answered)return;answered=true;
+      Track.q(q.type,answer,false,'(こたえをみた)');
       fb.style.cssText='margin-top:12px;padding:10px 16px;border-radius:14px;font-size:15px;font-weight:700;background:'+YG.hint.bg+';color:'+YG.hint.text+';border:2px solid '+YG.hint.border+';display:block;font-family:'+ff()+';';
       fb.textContent=t('hintLabel')+'「'+answer+'」';
       fb.style.display='block';nextBtn.style.display='block';hintBtn.style.display='none';
@@ -443,6 +945,7 @@ function showQuiz(){
 }
 
 function showResult(){
+  Track.end(null,{total:totalQ,correct:score});
   app.innerHTML='';
   var pct=score/totalQ;
   var msg=pct>=0.9?t('perfect'):pct>=0.6?t('good'):t('tryAgain');
@@ -609,6 +1112,7 @@ function fb(ok,msg,speakTxt){
 function starsFor(ratio){return ratio>=0.9?3:ratio>=0.7?2:ratio>=0.4?1:0;}
 function result(mode,stars,headline,lines,again){
   saveBest(mode,stars);
+  Track.end(stars);
   screen();
   if(stars>=2)confetti();
   app.appendChild(h('div',{c:'stars pop',t:starText(stars)}));
@@ -644,6 +1148,7 @@ function genExploreQ(){
   return q;
 }
 function modeExplore(){
+  Track.begin('explore');
   var N=8,i=0,okN=0,states=[];
   function next(){
     if(i>=N){
@@ -677,7 +1182,9 @@ function modeExplore(){
     ]));
     var fbArea=h('div');
     var after=h('div');
+    var lastGiven='';
     function finishQ(ok,msg,sp){
+      Track.q('tw-'+q.kind,q.w.ja,ok,lastGiven);
       if(ok)okN++;
       states[i]=ok?'ok':'ng';
       fbArea.appendChild(fb(ok,msg,sp));
@@ -687,7 +1194,8 @@ function modeExplore(){
     if(q.kind==='month'){
       var opts=[];
       for(var k=0;k<12;k++){opts.push({t:(k+1)+'月',ok:k===q.ansM});}
-      var grid=choices(opts,function(ok){
+      var grid=choices(opts,function(ok,o){
+        lastGiven=o.t;
         var rd=MON_JA[q.ansM];
         finishQ(ok,(ok?L('せいかい！ ','Correct! '):L('ざんねん… ','Not quite… '))+q.w.ja+' ＝ '+(q.ansM+1)+'月（'+rd+'）',rd);
       });
@@ -708,7 +1216,7 @@ function modeExplore(){
           var c=h('button',{c:'cell'+(d===q.td?' today':'')+(wi===0?' sun':wi===6?' sat':''),t:String(d)});
           c.addEventListener('click',function(){
             if(locked)return;locked=true;
-            var ok=d===q.ans;
+            var ok=d===q.ans;lastGiven=d+'日';
             cells[q.ans].classList.add('ok');
             if(!ok)c.classList.add('ng');
             var rd=DAYS_JA[q.ans-1];
@@ -729,6 +1237,7 @@ function modeExplore(){
 
 /* ========== モード2：タイムトラベルでんしゃ ========== */
 function modeTrain(){
+  Track.begin('train');
   var N=10,i=0,tickets=0,states=[];
   var POS=[8,29,50,71,92];
   function next(){
@@ -763,7 +1272,9 @@ function modeTrain(){
     }
     app.appendChild(rail);
     var fbArea=h('div'),after=h('div');
+    var given='';
     function done(ok,msg){
+      Track.q('tw-'+u,target.ja,ok,given);
       if(ok){tickets++;confetti();}
       states[i]=ok?'ok':'ng';
       showLabels();
@@ -781,7 +1292,7 @@ function modeTrain(){
         b.addEventListener('click',function(){
           if(locked)return;locked=true;
           train.style.left=POS[k]+'%';
-          var ok=k===ti;
+          var ok=k===ti;given=items[k].ja;
           setTimeout(function(){
             sBtns[ti].classList.add('ok');
             if(!ok)b.classList.add('ng');
@@ -796,7 +1307,8 @@ function modeTrain(){
       setTimeout(function(){train.style.left=POS[ti]+'%';},300);
       var wrongs=shuffle(items.filter(function(x,k){return k!==ti;})).slice(0,3);
       var opts=shuffle([target].concat(wrongs)).map(function(w){return {t:w.ja,sub:kj(w),ok:w===target};});
-      app.appendChild(choices(opts,function(ok){
+      app.appendChild(choices(opts,function(ok,o){
+        given=o.t;
         done(ok,(ok?L('せいかい！ ','Correct! '):L('ざんねん… こたえは ','Not quite… The answer is '))+target.ja+' ＝ '+target.en);
       }));
     }
@@ -808,9 +1320,9 @@ function modeTrain(){
 
 /* ========== モード3：ペアさがし ========== */
 function buildPairs(deck){
-  var time=ALL.map(function(w){return {a:{t:w.ja,sub:kj(w),sp:w.ja},b:{t:w.en}};});
-  var mon=MON_JA.map(function(r,i){return {a:{t:r,sub:S.kanji?(i+1)+'月':'',sp:r},b:{t:MON_EN[i]}};});
-  var day=SPECIAL.map(function(n){return {a:{t:n+'日'},b:{t:DAYS_JA[n-1],sp:DAYS_JA[n-1]}};});
+  var time=ALL.map(function(w){return {a:{t:w.ja,sub:kj(w),sp:w.ja},b:{t:w.en},sk:'tw-'+w.unit,item:w.ja};});
+  var mon=MON_JA.map(function(r,i){return {a:{t:r,sub:S.kanji?(i+1)+'月':'',sp:r},b:{t:MON_EN[i]},sk:'month',item:r};});
+  var day=SPECIAL.map(function(n){return {a:{t:n+'日'},b:{t:DAYS_JA[n-1],sp:DAYS_JA[n-1]},sk:'day',item:DAYS_JA[n-1]};});
   if(deck==='time')return time;
   if(deck==='month')return mon;
   if(deck==='day')return day;
@@ -847,9 +1359,10 @@ function modeMemory(){
 function memEasy(deck,n){
   var pairs=shuffle(buildPairs(deck)).slice(0,n);
   var cards=[];
-  pairs.forEach(function(p,id){cards.push({id:id,side:'a',c:p.a});cards.push({id:id,side:'b',c:p.b});});
+  pairs.forEach(function(p,id){cards.push({id:id,side:'a',c:p.a,p:p});cards.push({id:id,side:'b',c:p.b,p:p});});
   cards=shuffle(cards);
   var first=null,lock=false,misses=0,matched=0;
+  Track.begin('memory',{level:'easy',deck:deck,pairs:n});
   screen();
   app.appendChild(topbar('🃏 '+L('ペアさがし（かんたん）','Pair Match (Easy)'),modeMemory));
   var info=h('div',{c:'sub',t:''});
@@ -867,16 +1380,20 @@ function memEasy(deck,n){
       var a=first,b=cd;first=null;
       if(a.id===b.id&&a.side!==b.side){
         a.done=b.done=true;
+        Track.q(a.p.sk,a.p.item,true,'');
         [a,b].forEach(function(x){x.el.classList.remove('sel');x.el.classList.add('done');});
         matched++;upd();
         if(matched===n){
           var st=misses<=1?3:misses<=Math.ceil(n/2)?2:1;
           MT=setTimeout(function(){
+            Track.totals(n+misses,n);
             result('memory',st,L('ぜんぶ みつけた！','You found them all!'),[L('ミス：','Misses: ')+misses,st===3?L('てんさい！','Genius!'):L('よくできました！','Well done!')],function(){memEasy(deck,n);});
           },700);
         }
       }else{
         misses++;lock=true;upd();
+        Track.q(a.p.sk,a.p.item,false,b.c.t);
+        Track.q(b.p.sk,b.p.item,false,a.c.t);
         [a,b].forEach(function(x){x.el.classList.add('bad');});
         MT=setTimeout(function(){
           [a,b].forEach(function(x){x.el.classList.remove('bad');x.el.classList.remove('sel');});
@@ -893,9 +1410,10 @@ function memEasy(deck,n){
 function memGame(deck,n){
   var pairs=shuffle(buildPairs(deck)).slice(0,n);
   var cards=[];
-  pairs.forEach(function(p,id){cards.push({id:id,side:'a',c:p.a});cards.push({id:id,side:'b',c:p.b});});
+  pairs.forEach(function(p,id){cards.push({id:id,side:'a',c:p.a,p:p});cards.push({id:id,side:'b',c:p.b,p:p});});
   cards=shuffle(cards);
   var first=null,lock=false,moves=0,matched=0;
+  Track.begin('memory',{level:'hard',deck:deck,pairs:n});
   screen();
   app.appendChild(topbar('🃏 '+L('ペアさがし','Pair Match'),modeMemory));
   var info=h('div',{c:'sub',t:''});
@@ -923,6 +1441,7 @@ function memGame(deck,n){
         if(matched===n){
           var st=moves<=n+2?3:moves<=n*2?2:1;
           MT=setTimeout(function(){
+            Track.totals(moves,n);
             result('memory',st,L('ぜんぶ みつけた！','You found them all!'),[moves+L(' かいで クリア！',' moves!'),st===3?L('てんさい！','Genius!'):L('よくできました！','Well done!')],function(){memGame(deck,n);});
           },700);
         }
@@ -953,19 +1472,19 @@ function genSurvQ(){
     var n=pick(SPECIAL),cor=DAYS_JA[n-1];
     var extra=DAYS_JA[pick(SPECIAL.filter(function(x){return x!==n;}))-1];
     var o=fillOpts(cor,(W_DAY[n]||[]).concat([extra]),DAYS_JA);
-    return {big:n+'日',sub:L('なんにち？','How do you read this date?'),opts:o.map(function(t){return {t:t,ok:t===cor};}),explain:n+'日 ＝ '+cor,sp:cor};
+    return {sk:'day',item:cor,big:n+'日',sub:L('なんにち？','How do you read this date?'),opts:o.map(function(t){return {t:t,ok:t===cor};}),explain:n+'日 ＝ '+cor,sp:cor};
   }
   if(r<0.8){
     var m=pick([1,4,7,9,10,11,12,4,7,9]),cm=MON_JA[m-1];
     var o2=fillOpts(cm,W_MON[m]||[],MON_JA);
-    return {big:m+'月',sub:L('なんがつ？','How do you read this month?'),opts:o2.map(function(t){return {t:t,ok:t===cm};}),explain:m+'月 ＝ '+cm,sp:cm};
+    return {sk:'month',item:cm,big:m+'月',sub:L('なんがつ？','How do you read this month?'),opts:o2.map(function(t){return {t:t,ok:t===cm};}),explain:m+'月 ＝ '+cm,sp:cm};
   }
   var w=pick(ALL.filter(function(x){return x.off!==0;}));
   var sameU=TW[w.unit].filter(function(x){return x!==w;}).map(function(x){return x.ja;});
   var sameOff=ALL.filter(function(x){return x.off===w.off&&x!==w;}).map(function(x){return x.ja;});
   var wr=shuffle(sameU).slice(0,2).concat(shuffle(sameOff).slice(0,1));
   var o3=fillOpts(w.ja,wr,ALL.map(function(x){return x.ja;}));
-  return {big:w.en,sub:L('にほんごで なんと いう？','How do you say it in Japanese?'),opts:o3.map(function(t){var ww=ALL.filter(function(x){return x.ja===t;})[0];return {t:t,sub:kj(ww),ok:t===w.ja};}),explain:w.en+' ＝ '+w.ja,sp:w.ja};
+  return {sk:'tw-'+w.unit,item:w.ja,big:w.en,sub:L('にほんごで なんと いう？','How do you say it in Japanese?'),opts:o3.map(function(t){var ww=ALL.filter(function(x){return x.ja===t;})[0];return {t:t,sub:kj(ww),ok:t===w.ja};}),explain:w.en+' ＝ '+w.ja,sp:w.ja};
 }
 function modeSurvival(){
   var timerOn=true;
@@ -984,6 +1503,7 @@ function modeSurvival(){
 }
 function surGame(timerOn){
   var lives=3,combo=0,score=0,n=0,correct=0,GOAL=20,TIME=12;
+  Track.begin('survival',{timer:!!timerOn});
   function end(){
     var cleared=lives>0;
     var st=cleared?(lives>=2?3:2):(correct>=8?1:0);
@@ -1014,6 +1534,7 @@ function surGame(timerOn){
     var grid=choices(q.opts,function(ok,o){
       if(TM){clearInterval(TM);TM=null;}
       n++;
+      Track.q(q.sk,q.item,ok,o?o.t:'(じかんぎれ)');
       var msg;
       if(ok){
         combo++;correct++;score+=10+Math.min(combo-1,5)*2;
@@ -1110,10 +1631,13 @@ function buildScenes(Dt){
     ask:L('「'+mw.ja+'」は どんな いみ？','What does “'+mw.ja+'” mean?'),
     opts:mo.map(function(t){return {t:t,ok:t===mw.en};}),ans:mw.ja+' ＝ '+mw.en,sp:mw.ja
   });
+  var tg=[['date-calc','あした'],['date-calc','あさって'],['date-calc','おととい'],['date-calc','らいしゅう'],['tw-month','らいげつ'],['tw-month','せんげつ'],['tw-year',yw.ja],['tw-'+mw.unit,mw.ja]];
+  sc.forEach(function(x,k){x.sk=tg[k][0];x.item=tg[k][1];});
   return sc;
 }
 function modeStory(){
   var Dt=new Date(2026+ri(0,1),ri(0,11),ri(1,28));
+  Track.begin('story');
   var scenes=buildScenes(Dt),N=scenes.length,i=0,okN=0;
   var today=fullNum(Dt)+'（'+WD_K[Dt.getDay()]+'）';
   screen();
@@ -1140,7 +1664,8 @@ function modeStory(){
     app.appendChild(h('div',{c:'bubble'},[h('div',{c:'av',t:'🐱'}),h('div',{c:'tx',t:sc.say})]));
     app.appendChild(h('div',{c:'mid',s:'text-align:center;margin:10px 0;',t:sc.ask}));
     var fbArea=h('div'),after=h('div');
-    app.appendChild(choices(sc.opts,function(ok){
+    app.appendChild(choices(sc.opts,function(ok,o){
+      Track.q(sc.sk,sc.item,ok,o.t);
       if(ok)okN++;
       fbArea.appendChild(h('div',{c:'bubble pop'},[h('div',{c:'av',t:ok?'😸':'😿'}),h('div',{c:'tx',t:ok
         ?L('「そうか！ '+sc.ans+' だね。ありがとう！ ぶひんが 1こ みつかったよ」','“I see! '+sc.ans+'. Thank you! We found one more part!”')
@@ -1173,9 +1698,11 @@ var MODES=[
   {k:'story',e:'🐱',ja:'タイムマシンの ものがたり',en:'The Time Machine Story',dj:'ねこの ミルを たすけよう',de:'Help Mil the cat fix the machine',fn:modeStory}
 ];
 function home(){
+  Track.abandon();
   screen();
   app.appendChild(h('div',{c:'title',t:L('にほんご カレンダー あそび','Japanese Calendar Fun')}));
   app.appendChild(h('div',{c:'sub',t:L('がつ・にち・ようび・おととい・あした… あそびながら おぼえよう！','Months, dates, days, yesterday, tomorrow… learn by playing!')}));
+  app.appendChild(CalAuth.chip());
   var tabs=h('div',{c:'tabs'});
   [['ja','日本語'],['en','English']].forEach(function(l){
     tabs.appendChild(h('button',{c:S.lang===l[0]?'on':'',t:l[1],on:{click:function(){if(S.lang!==l[0]){S.lang=l[0];home();}}}}));
@@ -1197,7 +1724,7 @@ function home(){
   });
 }
 window.TimeGame={home:function(l){if(l)S.lang=l;home();}};
-home();
+CalAuth.start(home);
 })();
 
 </script>
