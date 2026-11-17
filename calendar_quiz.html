@@ -382,6 +382,21 @@ function analyze(ss,aa){
   });
   R.weak=items.filter(function(o){return o.n>=3&&o.rate<0.6;}).sort(function(a,b){return a.rate-b.rate||b.n-a.n;}).slice(0,10);
   R.strong=items.filter(function(o){return o.n>=4&&o.rate>=0.9;}).sort(function(a,b){return b.n-a.n;}).slice(0,10);
+  /* ことばごとの変化：古い順に並べて「前」と「最近」を比べる */
+  var sortedA=aa.slice().sort(function(a,b){return a.created_at<b.created_at?-1:a.created_at>b.created_at?1:0;});
+  var seq={};
+  sortedA.forEach(function(a){if(!a.item)return;var k=a.skill+'|'+a.item;(seq[k]=seq[k]||[]).push(a.correct?1:0);});
+  function avg(a){return a.length?a.reduce(function(x,y){return x+y;},0)/a.length:0;}
+  items.forEach(function(o){
+    o.seq=seq[o.skill+'|'+o.item]||[];
+    var n=o.seq.length;
+    if(n>=2){var k=Math.min(3,Math.ceil(n/2));o.recent=avg(o.seq.slice(-k));o.before=avg(o.seq.slice(0,n-k));}
+  });
+  R.improved=items.filter(function(o){return o.n>=2&&o.before<=0.5&&o.recent>=0.8;}).sort(function(a,b){return (b.recent-b.before)-(a.recent-a.before)||b.n-a.n;});
+  R.declined=items.filter(function(o){return o.n>=2&&o.before>=0.8&&o.recent<=0.5;}).sort(function(a,b){return (a.recent-a.before)-(b.recent-b.before)||b.n-a.n;});
+  R.tricky=items.filter(function(o){return o.rate<0.6&&R.improved.indexOf(o)<0&&R.declined.indexOf(o)<0;}).sort(function(a,b){return a.rate-b.rate||b.n-a.n;});
+  R.good=items.filter(function(o){return o.rate>=0.8&&R.declined.indexOf(o)<0;}).sort(function(a,b){return b.n-a.n||b.rate-a.rate;});
+  R.nItems=items.length;
   /* ゲーム別 */
   R.modes={};
   ss.forEach(function(s){
@@ -430,6 +445,8 @@ function comments(R){
   if(R.weak.length){
     out.push(['🔍','つまずきやすいことば：'+R.weak.slice(0,5).map(function(o){return '「'+o.item+'」';}).join('')+'。（下の表に、よくある間違いも出しています）']);
   }
+  if(R.improved.length)out.push(['🌱','できるようになったことば：'+R.improved.slice(0,5).map(function(o){return '「'+o.item+'」';}).join('')+'。前は間違えていたのに、最近は答えられています。']);
+  if(R.declined.length)out.push(['🔁','前はできたのに最近間違えることば：'+R.declined.slice(0,5).map(function(o){return '「'+o.item+'」';}).join('')+'。忘れかけているかもしれません。']);
   if(R.trend){
     if(R.trend.diff>=8)out.push(['📈','直近の正答率は '+Math.round(R.trend.recent*100)+'%。その前（'+Math.round(R.trend.prev*100)+'%）より伸びています。']);
     else if(R.trend.diff<=-8)out.push(['📉','直近の正答率は '+Math.round(R.trend.recent*100)+'%。その前（'+Math.round(R.trend.prev*100)+'%）より少し下がっています。難しい分野を選んでいるだけかもしれません。']);
@@ -486,6 +503,45 @@ function trendSvg(series){
   return svg;
 }
 
+function wordRow(o,showWrong){
+  var wrap=mk('div','border-bottom:1px solid #E8F5E9;');
+  var row=mk('div','display:flex;align-items:center;gap:8px;padding:9px 4px;font-size:13px;color:'+C.text+';');
+  var marks=mk('div','font-size:13px;letter-spacing:2px;white-space:nowrap;');
+  o.seq.slice(-8).forEach(function(v){marks.appendChild(mk('span','color:'+(v?C.green:C.warn)+';font-weight:700;',v?'○':'✕'));});
+  add(row,
+    mk('div','flex:1;min-width:0;font-size:15px;font-weight:700;','「'+o.item+'」'),
+    mk('div','font-size:11px;color:'+C.sub+';white-space:nowrap;',SKILL_SHORT[o.skill]||o.skill),
+    marks);
+  wrap.appendChild(row);
+  var note=[];
+  if(o.n===1)note.push('まだ1回だけ（様子見）');
+  if(showWrong&&o.topWrong)note.push('よくある答え：'+o.topWrong);
+  if(note.length)wrap.appendChild(mk('div','font-size:12px;color:'+C.sub+';padding:0 4px 8px;',note.join('　')));
+  return wrap;
+}
+function wordGroup(title,desc,list,showWrong,empty){
+  var box=mk('div','margin-bottom:18px;');
+  add(box,mk('div','font-size:14px;font-weight:700;color:'+C.text+';',title+'（'+list.length+'）'),mk('div','font-size:12px;color:'+C.sub+';margin:2px 0 4px;line-height:1.6;',desc));
+  if(!list.length){box.appendChild(mk('div','font-size:12px;color:'+C.gray+';padding:6px 4px;',empty));return box;}
+  var body=mk('div');var shown=10;
+  var more=mk('button',ghostCss+'margin-top:8px;','もっと見る');
+  function paint(){body.innerHTML='';list.slice(0,shown).forEach(function(o){body.appendChild(wordRow(o,showWrong));});more.style.display=list.length>shown?'inline-block':'none';}
+  more.addEventListener('click',function(){shown+=20;paint();});
+  paint();add(box,body,more);
+  return box;
+}
+function wordCard(R){
+  var card=cardEl();
+  add(card,h2('ことばごとの変化・様子'),
+    mk('div','font-size:12px;color:'+C.sub+';line-height:1.7;margin-bottom:14px;','○＝できた　✕＝間違えた（左が古く、右が新しい。最近の8回まで）。1回遊んだだけでも出ます。回数が少ないうちは「様子見」の目安です。'));
+  if(!R.nItems){add(card,mk('div','font-size:13px;color:'+C.sub+';','まだ記録がありません。'));return card;}
+  add(card,
+    wordGroup('🌱 できるようになったことば','前は間違えていたけれど、最近はできているもの（2回以上出たことばが対象）',R.improved,false,'いまのところありません。もう少し遊ぶと見えてきます。'),
+    wordGroup('🔁 前はできたのに、最近間違えることば','前はできていたのに、最近つまずいているもの。復習のタイミングかもしれません',R.declined,true,'いまのところありません。'),
+    wordGroup('😣 間違いがちなことば','正答率が60%未満のもの。先に復習するとよさそうです',R.tricky,true,'いまのところありません。'),
+    wordGroup('✅ できていることば','正答率が80%以上のもの',R.good,false,'まだありません。'));
+  return card;
+}
 async function teacherDetail(st){
   var app=teacherShell(st.name+' さん',teacherList,'← 生徒一覧へ');
   var wait=mk('div','text-align:center;color:'+C.sub+';padding:30px;','読み込み中…');
@@ -528,25 +584,8 @@ async function teacherDetail(st){
     app.appendChild(tc);
   }
 
-  /* 苦手・得意なことば */
-  var wc=cardEl();add(wc,h2('つまずきやすいことば'));
-  if(!R.weak.length)add(wc,mk('div','font-size:13px;color:'+C.sub+';line-height:1.7;','いまのところ、3回以上出て正答率60%未満のことばはありません。'));
-  R.weak.forEach(function(o){
-    var row=mk('div','','',{className:'tr-row'});
-    add(row,
-      mk('div','flex:1;min-width:0;font-size:15px;font-weight:700;','「'+o.item+'」'),
-      mk('div','font-size:11px;color:'+C.sub+';',SKILL_SHORT[o.skill]||o.skill),
-      mk('div','font-size:13px;font-weight:700;color:'+C.warn+';width:84px;text-align:right;',Math.round(o.rate*100)+'%（'+o.c+'/'+o.n+'）'));
-    wc.appendChild(row);
-    if(o.topWrong)wc.appendChild(mk('div','font-size:12px;color:'+C.sub+';padding:0 4px 8px;','よくある答え：'+o.topWrong));
-  });
-  if(R.strong.length){
-    add(wc,mk('div','font-size:13px;font-weight:700;color:'+C.text+';margin:14px 0 6px;','よくできることば'));
-    var chips=mk('div','display:flex;flex-wrap:wrap;gap:6px;');
-    R.strong.forEach(function(o){chips.appendChild(mk('span','font-size:13px;padding:4px 12px;border-radius:50px;background:'+C.light+';color:'+C.text+';border:1px solid '+C.border+';',o.item));});
-    wc.appendChild(chips);
-  }
-  app.appendChild(wc);
+  /* ことばごとの変化・様子 */
+  app.appendChild(wordCard(R));
 
   /* ゲーム別 */
   var mc=cardEl();add(mc,h2('ゲームごとの様子'));
