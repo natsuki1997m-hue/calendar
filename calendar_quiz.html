@@ -146,7 +146,29 @@ var CalAuth=(function(){
     supa=window.supabase.createClient(SUPA_URL,SUPA_KEY);
     return supa;
   }
-  function start(cb){homeCb=cb;var n='';try{n=localStorage.getItem(NAME_KEY)||'';}catch(e){}showLogin('',n);}
+  function start(cb){
+    homeCb=cb;var n='',room='',skip=false;
+    try{n=localStorage.getItem(NAME_KEY)||'';room=localStorage.getItem('jr_student')||'';skip=sessionStorage.getItem('jrSkipAuto')==='1';}catch(e){}
+    if(room&&!skip){autoLogin(room,n);return;}
+    showLogin('',n);
+  }
+  /* 生徒ページ（Natsuki's Japanese Room）が残した名前で、打たずに入る。見つからなければ作る（打ち間違いではないので確認は省く） */
+  async function autoLogin(name,fallback){
+    var c=client();
+    if(!c){showLogin('',fallback);return;}
+    try{
+      var r=await c.from('students').select('*');
+      if(r.error)throw r.error;
+      var key=norm(name);
+      var found=(r.data||[]).filter(function(s){return norm(s.name)===key;})[0];
+      if(!found){
+        var ins=await c.from('students').insert({name:name}).select().single();
+        if(ins.error||!ins.data)throw (ins.error||new Error('insert failed'));
+        found=ins.data;
+      }
+      finishLogin(found);
+    }catch(e){showLogin('',fallback||name);}
+  }
 
   function showLogin(msg,prefill){
     Track.abandon();student=null;
@@ -211,7 +233,7 @@ var CalAuth=(function(){
     appEl().className='';
     if(homeCb)homeCb();
   }
-  function logout(){showLogin('','');}
+  function logout(){try{sessionStorage.setItem('jrSkipAuto','1');}catch(e){}showLogin('','');}
   function chip(){
     var row=mk('div','display:flex;align-items:center;justify-content:center;gap:10px;margin:0 0 10px;font-size:13px;color:'+C.sub+';font-weight:700;');
     add(row,mk('span','','👤 '+(student?student.name:'')),mk('button','background:none;border:none;color:#9E9E9E;text-decoration:underline;font-size:12px;cursor:pointer;font-family:inherit;','ログアウト',{on:{click:logout}}));
